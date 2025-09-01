@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Color Clash</title>
+  <title>Color Clash - 2 Player Online</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body { font-family: 'Inter', sans-serif; }
     .spinner {
@@ -32,80 +33,108 @@
       50% { transform: scale(1.05); }
       100% { transform: scale(1); }
     }
+    .winning-line {
+      position: absolute;
+      background-color: gold;
+      z-index: 10;
+      border-radius: 2px;
+    }
+    .player-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-weight: 600;
+    }
   </style>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"></script>
 </head>
-<body class="bg-[#f0f4f8] flex items-center justify-center min-h-screen p-4">
+<body class="bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center min-h-screen p-4">
 
   <!-- Main Game Container -->
-  <main class="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center max-w-lg w-full">
+  <main class="bg-white rounded-3xl shadow-2xl p-6 md:p-8 flex flex-col items-center max-w-lg w-full">
 
     <!-- Header -->
-    <header class="text-center mb-6">
-      <h1 class="text-5xl md:text-6xl font-extrabold text-gray-800">Color Clash</h1>
-      <p class="text-gray-600 mt-2">A multiplayer Tic-Tac-Toe game</p>
+    <header class="text-center mb-6 w-full">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Color Clash</h1>
+      <p class="text-gray-600 mt-2">A 2-player online strategy game</p>
     </header>
 
-    <!-- Status -->
-    <div class="w-full text-center text-lg font-medium text-gray-600 mb-6">
-      <div class="flex justify-between items-center mb-2">
-        <span>Your ID:</span>
-        <span id="your-id" class="font-bold text-gray-800"></span>
+    <!-- Player Status -->
+    <div class="w-full flex justify-between items-center mb-6 bg-gray-50 p-4 rounded-xl shadow-sm">
+      <div class="flex items-center">
+        <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+        <span class="text-sm font-medium">You:</span>
+        <span id="your-id" class="font-bold text-gray-800 ml-2"></span>
       </div>
-      <div class="flex justify-between items-center mb-2">
-        <span>Room ID:</span>
-        <span id="room-id" class="font-bold text-gray-800">-</span>
+      <div class="flex items-center">
+        <span class="text-sm font-medium">Room:</span>
+        <span id="room-id" class="font-bold text-gray-800 ml-2">-</span>
+        <button id="copy-room-id-btn" class="ml-2 text-blue-500 hover:text-blue-700 hidden">
+          <i class="fas fa-copy"></i>
+        </button>
       </div>
-      <div class="flex justify-between items-center mb-2">
-        <span>Opponent(s):</span>
-        <span id="opponent-id" class="font-bold text-gray-800">waiting...</span>
+    </div>
+
+    <!-- Game Status -->
+    <div class="w-full bg-gray-50 rounded-xl p-4 mb-6 shadow-sm">
+      <div class="flex justify-between items-center mb-3">
+        <div class="flex items-center">
+          <span class="text-sm font-medium mr-2">Opponent:</span>
+          <span id="opponent-id" class="font-bold text-gray-800">Waiting...</span>
+        </div>
+        <div class="flex items-center">
+          <span class="text-sm font-medium mr-2">Turn:</span>
+          <span id="current-turn" class="font-bold text-gray-800">-</span>
+        </div>
       </div>
-      <div class="flex justify-between items-center mb-2">
-        <span>Turn:</span>
-        <span id="current-turn" class="font-bold text-gray-800"></span>
-      </div>
-      <div id="game-status" class="text-3xl font-extrabold mt-4 text-center text-green-600"></div>
-      <div id="loading-spinner" class="mt-4 hidden flex justify-center">
-        <div class="spinner animate-spin h-8 w-8 rounded-full border-4 border-t-blue-500"></div>
+      
+      <div id="game-status" class="text-xl font-bold text-center py-2 rounded-lg"></div>
+      
+      <div id="player-colors" class="flex justify-center gap-6 mt-3">
+        <div class="flex items-center">
+          <div class="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
+          <span class="text-sm">You</span>
+        </div>
+        <div class="flex items-center">
+          <div class="w-4 h-4 rounded-full bg-red-500 mr-2"></div>
+          <span class="text-sm">Opponent</span>
+        </div>
       </div>
     </div>
 
     <!-- Game Board -->
-    <div id="board" class="grid grid-cols-3 gap-2 w-full aspect-square bg-gray-100 rounded-lg p-2 mb-6 shadow-inner">
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+    <div id="board-container" class="relative w-full aspect-square bg-gray-100 rounded-xl p-2 mb-6 shadow-inner">
+      <div id="board" class="grid grid-cols-3 gap-2 w-full h-full">
+        <!-- Squares will be generated dynamically -->
+      </div>
+      <div id="winning-line" class="winning-line hidden"></div>
     </div>
 
     <!-- Buttons -->
-    <div class="w-full grid gap-4 grid-cols-1 md:grid-cols-3">
-      <button id="find-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
-        Find a Game
+    <div class="w-full grid gap-3 grid-cols-1 md:grid-cols-2">
+      <button id="find-game-btn" class="w-full py-3 rounded-xl font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors flex items-center justify-center">
+        <i class="fas fa-search mr-2"></i> Find Game
       </button>
-      <button id="create-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
-        Create Room
+      <button id="create-room-btn" class="w-full py-3 rounded-xl font-semibold text-white bg-purple-500 hover:bg-purple-600 transition-colors flex items-center justify-center">
+        <i class="fas fa-plus mr-2"></i> Create Room
       </button>
-      <button id="join-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
-        Join Room
+      <button id="join-room-btn" class="w-full py-3 rounded-xl font-semibold text-white bg-green-500 hover:bg-green-600 transition-colors flex items-center justify-center">
+        <i class="fas fa-sign-in-alt mr-2"></i> Join Room
       </button>
-      <button id="copy-room-id-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-purple-500 hover:bg-purple-600 transition-colors hidden">
-        Copy Room ID
+      <button id="leave-room-btn" class="w-full py-3 rounded-xl font-semibold text-white bg-gray-500 hover:bg-gray-600 transition-colors hidden">
+        <i class="fas fa-sign-out-alt mr-2"></i> Leave Room
       </button>
-      <button id="restart-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors hidden">
-        Restart Game
+      <button id="restart-game-btn" class="w-full py-3 rounded-xl font-semibold text-white bg-yellow-500 hover:bg-yellow-600 transition-colors hidden col-span-2">
+        <i class="fas fa-redo mr-2"></i> Play Again
       </button>
-      <button id="leave-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-gray-500 hover:bg-gray-600 transition-colors hidden">
-        Leave Room
-      </button>
+    </div>
+
+    <div id="loading-spinner" class="mt-6 hidden flex justify-center">
+      <div class="spinner animate-spin h-8 w-8 rounded-full border-4 border-t-blue-500"></div>
     </div>
 
   </main>
@@ -113,15 +142,18 @@
   <!-- Custom Modal -->
   <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
     <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col items-center">
-      <h2 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+      <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+        <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+      </div>
+      <h2 id="modal-title" class="text-xl font-bold text-gray-800 mb-2 text-center"></h2>
       <p id="modal-message" class="text-gray-600 text-center mb-4"></p>
-      <input id="modal-input" type="text" class="w-full p-2 border rounded-md mb-4 text-center hidden" placeholder="Enter Room ID">
-      <div class="flex gap-2 w-full">
-        <button id="modal-confirm-btn" class="flex-1 py-2 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors hidden">
-          Confirm
-        </button>
-        <button id="modal-close-btn" class="flex-1 py-2 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors">
+      <input id="modal-input" type="text" class="w-full p-3 border border-gray-300 rounded-xl mb-4 text-center hidden" placeholder="Enter Room ID">
+      <div class="flex gap-3 w-full">
+        <button id="modal-close-btn" class="flex-1 py-3 rounded-xl font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors">
           Close
+        </button>
+        <button id="modal-confirm-btn" class="flex-1 py-3 rounded-xl font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors hidden">
+          Confirm
         </button>
       </div>
     </div>
@@ -129,7 +161,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getDatabase, ref, set, push, onValue, off, get, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getDatabase, ref, set, push, onValue, off, get, update, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
     // Firebase Config
     const firebaseConfig = {
@@ -153,10 +185,10 @@
     let currentRoomId = null;
     let unlistenBoard = null;
     let unlistenRoom = null;
-    let isPlayerX = true; // Player X goes first
+    let unlistenRoomsList = null;
 
     // UI Elements
-    const boardSquares = document.querySelectorAll(".board-square");
+    const boardContainer = document.getElementById("board");
     const statusText = document.getElementById("game-status");
     const restartBtn = document.getElementById("restart-game-btn");
     const leaveRoomBtn = document.getElementById("leave-room-btn");
@@ -164,6 +196,8 @@
     const loadingSpinner = document.getElementById("loading-spinner");
     const turnText = document.getElementById("current-turn");
     const roomIdText = document.getElementById("room-id");
+    const opponentText = document.getElementById("opponent-id");
+    const winningLine = document.getElementById("winning-line");
 
     // Modal Elements
     const modal = document.getElementById("custom-modal");
@@ -172,6 +206,15 @@
     const modalInput = document.getElementById("modal-input");
     const modalConfirmBtn = document.getElementById("modal-confirm-btn");
     const modalCloseBtn = document.getElementById("modal-close-btn");
+
+    // Create board squares dynamically
+    for (let i = 0; i < 9; i++) {
+      const square = document.createElement("div");
+      square.className = "board-square bg-white rounded-lg cursor-pointer shadow-sm";
+      square.dataset.index = i;
+      boardContainer.appendChild(square);
+    }
+    const boardSquares = document.querySelectorAll(".board-square");
 
     /**
      * Shows a custom modal with a message and optional input.
@@ -201,6 +244,7 @@
           resolve(null);
         };
         modal.classList.remove('hidden');
+        if (showInput) modalInput.focus();
       });
     }
 
@@ -208,19 +252,26 @@
     function resetUI() {
       if (unlistenBoard) off(unlistenBoard);
       if (unlistenRoom) off(unlistenRoom);
+      if (unlistenRoomsList) off(unlistenRoomsList);
+      
       currentRoomId = null;
       boardSquares.forEach(sq => {
         sq.style.backgroundColor = '';
-        sq.classList.remove('cursor-not-allowed', 'occupied');
+        sq.classList.remove('occupied');
       });
-      document.getElementById("opponent-id").textContent = "waiting...";
+      
+      opponentText.textContent = "Waiting...";
       roomIdText.textContent = "-";
       statusText.textContent = "";
-      turnText.textContent = "";
+      statusText.className = "text-xl font-bold text-center py-2 rounded-lg";
+      turnText.textContent = "-";
+      winningLine.classList.add('hidden');
+      
       restartBtn.classList.add('hidden');
       leaveRoomBtn.classList.add('hidden');
       copyRoomIdBtn.classList.add('hidden');
       loadingSpinner.classList.add('hidden');
+      
       document.getElementById("find-game-btn").disabled = false;
       document.getElementById("create-room-btn").disabled = false;
       document.getElementById("join-room-btn").disabled = false;
@@ -234,19 +285,23 @@
       resetUI();
       const roomRef = ref(db, "rooms");
       const newRoomRef = push(roomRef);
+      
       set(newRoomRef, {
         players: { [playerId]: true },
         turn: playerId,
         board: Array(9).fill(null),
         status: 'waiting',
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        createdBy: playerId
       });
+      
       currentRoomId = newRoomRef.key;
       roomIdText.textContent = currentRoomId;
       listenRoom(currentRoomId);
       copyRoomIdBtn.classList.remove('hidden');
       leaveRoomBtn.classList.remove('hidden');
-      showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend!`);
+      
+      showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend to play!`);
     }
 
     /**
@@ -256,8 +311,12 @@
      */
     function joinRoom(roomId, playerId) {
       resetUI();
+      loadingSpinner.classList.remove('hidden');
+      
       const roomRef = ref(db, "rooms/" + roomId);
       get(roomRef).then(snapshot => {
+        loadingSpinner.classList.add('hidden');
+        
         if (snapshot.exists()) {
           const room = snapshot.val();
           if (room.status === 'waiting' && room.players && Object.keys(room.players).length < 2) {
@@ -266,11 +325,13 @@
                 [`players/${playerId}`]: true,
                 status: 'playing'
               });
+              
               currentRoomId = roomId;
               roomIdText.textContent = currentRoomId;
               listenRoom(roomId);
               leaveRoomBtn.classList.remove('hidden');
-              showModal("Joined Room!", `You have joined room: ${roomId}`);
+              
+              showModal("Joined Room!", `You have joined room: ${roomId}. Game is starting!`);
             } else {
               showModal("Error", "You are already in this room.");
             }
@@ -281,6 +342,7 @@
           showModal("Error", "Room not found. Please check the ID.");
         }
       }).catch(error => {
+        loadingSpinner.classList.add('hidden');
         console.error(error);
         showModal("Error", "Could not join room. Please check the ID.");
       });
@@ -296,31 +358,41 @@
         const room = snapshot.val();
         if (room) {
           const players = room.players || {};
-          const names = Object.keys(players).filter(p => p !== yourPlayerId);
-          document.getElementById("opponent-id").textContent = names.join(", ") || "waiting...";
-
-          if (Object.keys(players).length === 2 && room.status === 'waiting') {
+          const playerIds = Object.keys(players);
+          const opponentId = playerIds.find(id => id !== yourPlayerId);
+          
+          opponentText.textContent = opponentId ? opponentId : "Waiting...";
+          
+          // Update UI based on game state
+          if (playerIds.length === 2 && room.status === 'waiting') {
             update(ref(db, `rooms/${roomId}`), { status: 'playing' });
             listenBoard(roomId);
-          } else if (Object.keys(players).length === 2 && room.status === 'playing') {
+          } else if (playerIds.length === 2 && room.status === 'playing') {
             listenBoard(roomId);
           }
 
+          // Update turn indicator
           if (room.turn) {
             turnText.textContent = room.turn === yourPlayerId ? "Your Turn" : "Opponent's Turn";
             turnText.className = room.turn === yourPlayerId ? 
               "font-bold text-green-600 pulse" : "font-bold text-red-600";
           }
           
+          // Handle game end states
           if (room.winner) {
-            statusText.textContent = room.winner === yourPlayerId ? "You Win!" : "You Lose!";
+            statusText.textContent = room.winner === yourPlayerId ? "You Win! 🎉" : "You Lose!";
             statusText.className = room.winner === yourPlayerId ? 
-              "text-3xl font-extrabold mt-4 text-center text-green-600" : 
-              "text-3xl font-extrabold mt-4 text-center text-red-600";
+              "text-xl font-bold text-center py-2 rounded-lg bg-green-100 text-green-700" : 
+              "text-xl font-bold text-center py-2 rounded-lg bg-red-100 text-red-700";
             restartBtn.classList.remove('hidden');
+            
+            // Show winning line if available
+            if (room.winningLine) {
+              drawWinningLine(room.winningLine);
+            }
           } else if (room.status === 'draw') {
             statusText.textContent = "It's a Draw!";
-            statusText.className = "text-3xl font-extrabold mt-4 text-center text-yellow-600";
+            statusText.className = "text-xl font-bold text-center py-2 rounded-lg bg-yellow-100 text-yellow-700";
             restartBtn.classList.remove('hidden');
           } else if (room.status === 'playing') {
             statusText.textContent = "";
@@ -332,20 +404,57 @@
       });
     }
     
-    /** Checks for a winning combination on the board. */
+    /** Checks for a winning combination on the board and returns the winner and line coordinates. */
     function checkWin(board) {
       const winConditions = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],
-        [0, 4, 8], [2, 4, 6]
+        [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+        [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+        [0, 4, 8], [2, 4, 6]             // Diagonals
       ];
+      
       for (let i = 0; i < winConditions.length; i++) {
         const [a, b, c] = winConditions[i];
         if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-          return board[a];
+          return {
+            winner: board[a],
+            line: winConditions[i]
+          };
         }
       }
       return null;
+    }
+
+    /**
+     * Draws a line through the winning squares
+     * @param {Array} line - The winning line indices [a, b, c]
+     */
+    function drawWinningLine(line) {
+      winningLine.classList.remove('hidden');
+      
+      // Get the board container dimensions
+      const boardRect = document.getElementById('board-container').getBoundingClientRect();
+      const squareSize = boardRect.width / 3;
+      
+      // Get the center points of the first and last squares in the line
+      const firstSquare = boardSquares[line[0]].getBoundingClientRect();
+      const lastSquare = boardSquares[line[2]].getBoundingClientRect();
+      
+      const x1 = firstSquare.left - boardRect.left + firstSquare.width/2;
+      const y1 = firstSquare.top - boardRect.top + firstSquare.height/2;
+      const x2 = lastSquare.left - boardRect.left + lastSquare.width/2;
+      const y2 = lastSquare.top - boardRect.top + lastSquare.height/2;
+      
+      // Calculate line length and angle
+      const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+      const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      
+      // Position and style the line
+      winningLine.style.width = length + 'px';
+      winningLine.style.height = '6px';
+      winningLine.style.left = x1 + 'px';
+      winningLine.style.top = (y1 - 3) + 'px';
+      winningLine.style.transform = `rotate(${angle}deg)`;
+      winningLine.style.transformOrigin = '0 0';
     }
 
     /**
@@ -356,20 +465,25 @@
       const boardRef = ref(db, "rooms/" + roomId + "/board");
       unlistenBoard = onValue(boardRef, (snapshot) => {
         const board = snapshot.val() || Array(9).fill(null);
+        
+        // Update the UI board
         boardSquares.forEach((sq, idx) => {
           sq.style.backgroundColor = '';
           sq.classList.remove('occupied');
+          
           if (board[idx]) {
-            sq.style.backgroundColor = board[idx] === yourPlayerId ? "#3b82f6" : "#f87171";
+            sq.style.backgroundColor = board[idx] === yourPlayerId ? "#3b82f6" : "#ef4444";
             sq.classList.add('occupied');
           }
         });
         
-        const winner = checkWin(board);
-        if (winner) {
+        // Check for win or draw
+        const winResult = checkWin(board);
+        if (winResult) {
           update(ref(db, `rooms/${roomId}`), { 
-            winner: winner,
-            status: 'ended'
+            winner: winResult.winner,
+            status: 'ended',
+            winningLine: winResult.line
           });
         } else if (!board.includes(null)) {
           update(ref(db, `rooms/${roomId}`), { status: 'draw' });
@@ -397,35 +511,45 @@
       document.getElementById("join-room-btn").disabled = true;
 
       const roomsRef = ref(db, "rooms");
-      const findGameOnce = onValue(roomsRef, async (snapshot) => {
+      unlistenRoomsList = onValue(roomsRef, (snapshot) => {
         const rooms = snapshot.val();
         let foundGame = false;
+        
         if (rooms) {
           for (const roomId in rooms) {
             const room = rooms[roomId];
             if (room.players && Object.keys(room.players).length === 1 && room.status === 'waiting') {
-              await joinRoom(roomId, yourPlayerId);
+              joinRoom(roomId, yourPlayerId);
               foundGame = true;
               break;
             }
           }
         }
+        
         if (!foundGame) {
-          showModal("No games found", "No active games found, creating a new room for you.");
-          createRoom(yourPlayerId);
+          // If no game found after 10 seconds, create one
+          setTimeout(() => {
+            if (!currentRoomId) {
+              loadingSpinner.classList.add('hidden');
+              showModal("No games found", "No active games found, creating a new room for you.");
+              createRoom(yourPlayerId);
+            }
+          }, 10000);
+        } else {
+          loadingSpinner.classList.add('hidden');
         }
-        off(findGameOnce);
-        loadingSpinner.classList.add('hidden');
-      }, { onlyOnce: true });
+      });
     });
 
     document.getElementById("restart-game-btn").addEventListener("click", () => {
       if (currentRoomId) {
+        winningLine.classList.add('hidden');
         update(ref(db, `rooms/${currentRoomId}`), {
           turn: yourPlayerId,
           board: Array(9).fill(null),
           status: 'playing',
-          winner: null
+          winner: null,
+          winningLine: null
         });
         restartBtn.classList.add('hidden');
         statusText.textContent = "";
@@ -437,7 +561,7 @@
     document.getElementById("leave-room-btn").addEventListener("click", () => {
       if (currentRoomId) {
         const roomRef = ref(db, `rooms/${currentRoomId}/players/${yourPlayerId}`);
-        set(roomRef, null).then(() => {
+        remove(roomRef).then(() => {
           showModal("Left Room", "You have left the room.");
           resetUI();
         });
@@ -479,7 +603,7 @@
             
             update(roomRef, updates);
           } else if (room.winner || room.status === 'draw') {
-             showModal("Game Over", "The game has already ended. Please restart to play again.");
+             showModal("Game Over", "The game has already ended. Press 'Play Again' to restart.");
           } else if (room.turn !== yourPlayerId) {
             showModal("Wait Your Turn", "It is not your turn to play.");
           } else if (room.board && room.board[idx]) {
@@ -489,13 +613,16 @@
       });
     });
 
-    // Clean up old rooms on page load
+    // Clean up when leaving the page
     window.addEventListener('beforeunload', () => {
       if (currentRoomId) {
         const roomRef = ref(db, `rooms/${currentRoomId}/players/${yourPlayerId}`);
-        set(roomRef, null);
+        remove(roomRef);
       }
     });
+
+    // Initialize the app
+    resetUI();
   </script>
 
 </body>
