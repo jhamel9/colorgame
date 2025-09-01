@@ -267,18 +267,21 @@
     </div>
 
     <script type="module">
-        // IMPORTANT: Since we can't run a real server, this code simulates a Socket.IO connection
-        // and server-side logic entirely on the client. In a real application, the `socket`
-        // would connect to a remote server (e.g., using Node.js) that handles the game state.
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Global variables for the game state
-        let userId = crypto.randomUUID();
-        let myColor;
-        let myTurn = false;
-        let game = null;
-        let roomPlayers = {}; // Maps room ID to player IDs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, query, where, addDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // UI elements
+        // Log to debug Firebase issues
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        setLogLevel('debug');
+
+        let db, auth, userId, gameDocRef, unsubscribe;
+
         const boardElement = document.getElementById('board');
         const statusMessageElement = document.getElementById('status-message');
         const findGameButton = document.getElementById('find-game-button');
@@ -288,7 +291,6 @@
         const yourIdElement = document.getElementById('your-id');
         const opponentIdElement = document.getElementById('opponent-id');
         const loadingSpinner = document.getElementById('loading');
-        const gameOptions = document.getElementById('game-options');
         
         const winningCombinations = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
@@ -296,59 +298,79 @@
             [0, 4, 8], [2, 4, 6]            // Diagonals
         ];
 
-        // --- Mock Socket.IO Client ---
-        // This object simulates the events sent and received from a real server.
-        const mockSocket = {
-            listeners: {},
-            on(eventName, callback) {
-                this.listeners[eventName] = callback;
-            },
-            emit(eventName, data) {
-                // In a real app, this would send data to the server.
-                // Here, we simulate the server processing the event.
-                console.log(`[Socket.emit] Event: ${eventName}, Data: `, data);
-                if (server.listeners[eventName]) {
-                    server.listeners[eventName](data);
-                }
-            }
-        };
+        // --- Firebase Initialization and Authentication ---
 
-        // --- Mock Socket.IO Server ---
-        // This object simulates a server that listens for and emits events to a single client.
-        const server = {
-            listeners: {},
-            on(eventName, callback) {
-                this.listeners[eventName] = callback;
-            },
-            emit(eventName, data, targetClient) {
-                // In a real app, this would send data back to the client.
-                // We're just calling the client's listener directly.
-                if (targetClient && mockSocket.listeners[eventName]) {
-                    console.log(`[Server.emit] To Client: ${targetClient}, Event: ${eventName}, Data: `, data);
-                    mockSocket.listeners[eventName](data);
-                }
+        async function initFirebase() {
+            if (!firebaseConfig) {
+                console.error("Firebase config is not available. This is a setup error.");
+                showLoading(false);
+                showMessage("Setup Error", "Firebase configuration is missing. The app cannot connect to the database.");
+                return;
             }
-        };
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Sign in with the provided custom token or anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Listen for auth state changes and get the user ID
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        yourIdElement.textContent = userId;
+                        showLoading(false);
+                        statusMessageElement.textContent = "Ready to play! Find or create a game.";
+                        
+                        findGameButton.disabled = false;
+                        createRoomButton.disabled = false;
+                        joinRoomButton.disabled = false;
+
+                        findGameButton.onclick = findOrCreateGame;
+                        createRoomButton.onclick = createRoom;
+                        joinRoomButton.onclick = joinRoom;
+
+                    } else {
+                        console.log("User is signed out or not authenticated.");
+                        yourIdElement.textContent = "N/A";
+                        showLoading(false);
+                        statusMessageElement.textContent = "Authentication failed. Please refresh.";
+                        
+                        findGameButton.disabled = true;
+                        createRoomButton.disabled = true;
+                        joinRoomButton.disabled = true;
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization failed: ", error);
+                showLoading(false);
+                showMessage("Connection Error", "Failed to connect to the database. Please check your network.");
+            }
+        }
 
         // --- Game Logic ---
 
-        function renderBoard() {
-            if (!game) return;
+        function renderBoard(boardData, myColor, myTurn, winnerCells = []) {
             boardElement.innerHTML = '';
-            game.board.forEach((color, index) => {
+            boardData.forEach((color, index) => {
                 const cell = document.createElement('div');
                 cell.classList.add('cell');
                 if (color !== 'empty') {
                     cell.classList.add(color);
                 }
-                const isMyTurn = myTurn && color === 'empty';
-                if (isMyTurn) {
-                    cell.onclick = () => handleCellClick(index);
+                if (myTurn && color === 'empty' && gameDocRef) {
+                    cell.onclick = () => handleCellClick(index, myColor);
                 }
                 
                 // Add winning class if cell is part of the winning combination
-                const winnerInfo = checkWinner(game.board);
-                if (winnerInfo.combo.includes(index)) {
+                if (winnerCells.includes(index)) {
                     cell.classList.add('win');
                 }
 
@@ -356,13 +378,28 @@
             });
         }
 
-        function handleCellClick(index) {
-            // Emit a move event to the server
-            mockSocket.emit('make_move', {
-                roomId: game.roomId,
-                player: userId,
-                index: index
-            });
+        async function handleCellClick(index, myColor) {
+            if (!gameDocRef) return;
+
+            const gameDoc = await getDoc(gameDocRef);
+            if (!gameDoc.exists()) {
+                showMessage("Game Error", "The game no longer exists.");
+                return;
+            }
+            const board = gameDoc.data().board;
+            if (board[index] !== 'empty') return;
+            
+            board[index] = myColor;
+            const nextTurn = myColor === 'red' ? 'blue' : 'red';
+            
+            try {
+                await updateDoc(gameDocRef, {
+                    board: board,
+                    currentPlayer: nextTurn,
+                });
+            } catch (error) {
+                console.error("Error updating board: ", error);
+            }
         }
 
         function checkWinner(board) {
@@ -391,162 +428,206 @@
             document.getElementById('message-modal').style.display = 'flex';
         }
 
-        // --- Socket Event Listeners (Client-side) ---
+        // --- Database Operations ---
 
-        mockSocket.on('room_joined', (data) => {
-            game = data.game;
-            myColor = data.myColor;
-            myTurn = data.myTurn;
+        async function findOrCreateGame() {
+            if (!userId) {
+                showMessage("Error", "User not authenticated. Please refresh the page.");
+                return;
+            }
+            
+            showLoading(true);
+            statusMessageElement.textContent = "Searching for an open game...";
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            
+            try {
+                const q = query(collection(db, publicDataPath), where("status", "==", "waiting"));
+                const querySnapshot = await getDocs(q);
 
-            opponentIdElement.textContent = game.player1Id === userId ? game.player2Id : game.player1Id;
-            statusMessageElement.textContent = myTurn ? `It's your turn (${myColor})!` : `Waiting for opponent's move...`;
-            gameOptions.style.display = 'none';
-            renderBoard();
-            showLoading(false);
-        });
-
-        mockSocket.on('game_state_update', (data) => {
-            game = data.game;
-            myTurn = data.myTurn;
-            const winnerInfo = checkWinner(game.board);
-
-            opponentIdElement.textContent = game.player1Id === userId ? game.player2Id : game.player1Id;
-
-            if (winnerInfo.winner) {
-                if (winnerInfo.winner === 'draw') {
-                    statusMessageElement.textContent = "It's a draw!";
+                if (!querySnapshot.empty) {
+                    // Join existing game
+                    const gameDoc = querySnapshot.docs[0];
+                    gameDocRef = doc(db, publicDataPath, gameDoc.id);
+                    await updateDoc(gameDocRef, {
+                        player2Id: userId,
+                        status: 'playing',
+                    });
+                    statusMessageElement.textContent = "Joined a game!";
+                    listenToGame();
                 } else {
-                    const winningColor = winnerInfo.winner;
-                    const winningPlayerId = game.player1Id === winningColor ? game.player1Id : game.player2Id;
-                    statusMessageElement.textContent = winningPlayerId === userId ? "You win!" : "You lose!";
+                    // Create a new game
+                    const newGame = {
+                        board: Array(9).fill('empty'),
+                        player1Id: userId,
+                        player2Id: null,
+                        status: 'waiting',
+                        currentPlayer: 'red', // Player 1 starts as red
+                        winner: null
+                    };
+                    const docRef = await addDoc(collection(db, publicDataPath), newGame);
+                    gameDocRef = doc(db, publicDataPath, docRef.id);
+                    statusMessageElement.textContent = "Waiting for an opponent...";
+                    listenToGame();
                 }
-                
-                renderBoard();
-                showMessage("Game Over", statusMessageElement.textContent);
-                gameOptions.style.display = 'flex';
+            } catch (error) {
+                console.error("Error finding or creating game:", error);
                 showLoading(false);
-                return;
+                showMessage("Database Error", "Could not connect to the game server. Try again.");
             }
-
-            statusMessageElement.textContent = myTurn ? `It's your turn (${myColor})!` : `Waiting for opponent's move...`;
-            renderBoard();
-        });
-
-        mockSocket.on('room_not_found', (data) => {
-            showLoading(false);
-            showMessage("Room Not Found", "The room ID you entered does not exist.");
-        });
-
-        mockSocket.on('room_unavailable', (data) => {
-            showLoading(false);
-            showMessage("Room Unavailable", "This room is already full or in a game.");
-        });
-
-        // --- Socket Event Listeners (Server-side Simulation) ---
-        // This is the "server" logic that processes events and updates the game state.
-
-        const games = {}; // A mock database of game rooms
-
-        server.on('create_room', (data) => {
-            const { roomId, player1Id } = data;
-            if (games[roomId]) {
-                server.emit('room_unavailable', { reason: 'exists' }, player1Id);
-                return;
-            }
-            const newGame = {
-                roomId,
-                board: Array(9).fill('empty'),
-                player1Id: player1Id,
-                player2Id: null,
-                status: 'waiting',
-                currentPlayer: 'red',
-                winner: null
-            };
-            games[roomId] = newGame;
-            roomPlayers[roomId] = [player1Id];
-            
-            server.emit('room_joined', { game: newGame, myColor: 'red', myTurn: true }, player1Id);
-        });
-
-        server.on('join_room', (data) => {
-            const { roomId, player2Id } = data;
-            const game = games[roomId];
-            if (!game) {
-                server.emit('room_not_found', {}, player2Id);
-                return;
-            }
-            if (game.player2Id) {
-                server.emit('room_unavailable', { reason: 'full' }, player2Id);
-                return;
-            }
-            game.player2Id = player2Id;
-            game.status = 'playing';
-            roomPlayers[roomId].push(player2Id);
-            
-            // Send update to both players
-            roomPlayers[roomId].forEach(playerId => {
-                const myColor = game.player1Id === playerId ? 'red' : 'blue';
-                const myTurn = game.currentPlayer === myColor;
-                server.emit('room_joined', { game, myColor, myTurn }, playerId);
-            });
-        });
-
-        server.on('make_move', (data) => {
-            const { roomId, player, index } = data;
-            const game = games[roomId];
-            if (!game) return;
-            
-            // Basic validation
-            if (game.board[index] !== 'empty' || game.status !== 'playing') return;
-            
-            const playerColor = game.player1Id === player ? 'red' : 'blue';
-            if (game.currentPlayer !== playerColor) return;
-
-            game.board[index] = playerColor;
-            game.currentPlayer = playerColor === 'red' ? 'blue' : 'red';
-            
-            const winnerInfo = checkWinner(game.board);
-            if (winnerInfo.winner) {
-                game.winner = winnerInfo.winner;
-            }
-
-            // Emit the updated game state to both players
-            roomPlayers[roomId].forEach(playerId => {
-                const myTurn = game.currentPlayer === (game.player1Id === playerId ? 'red' : 'blue');
-                server.emit('game_state_update', { game, myTurn }, playerId);
-            });
-        });
-
-        // --- Initialization and Button Handlers ---
+        }
         
-        yourIdElement.textContent = userId;
-        showLoading(false);
-        statusMessageElement.textContent = "Ready to play! Create or join a game.";
-
-        findGameButton.onclick = () => showMessage("Not Implemented", "Finding a random game requires a real server. Please use Create/Join Room.");
-        createRoomButton.onclick = () => {
+        async function createRoom() {
             const roomId = roomIdInput.value.trim();
             if (!roomId) {
                 showMessage("Missing ID", "Please enter a Room ID to create.");
                 return;
             }
+
+            if (!userId) {
+                showMessage("Error", "User not authenticated. Please refresh the page.");
+                return;
+            }
+
             showLoading(true);
-            statusMessageElement.textContent = `Creating room ${roomId}...`;
-            mockSocket.emit('create_room', { roomId, player1Id: userId });
-        };
-        joinRoomButton.onclick = () => {
+            statusMessageElement.textContent = `Creating room: ${roomId}...`;
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            const gameDocPath = `${publicDataPath}/${roomId}`;
+            gameDocRef = doc(db, gameDocPath);
+
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (docSnap.exists()) {
+                    showMessage("Room Exists", "This room ID is already taken. Please choose another one.");
+                    showLoading(false);
+                    return;
+                }
+
+                const newGame = {
+                    board: Array(9).fill('empty'),
+                    player1Id: userId,
+                    player2Id: null,
+                    status: 'waiting',
+                    currentPlayer: 'red',
+                    winner: null
+                };
+                await setDoc(gameDocRef, newGame);
+                
+                statusMessageElement.textContent = `Room "${roomId}" created. Waiting for an opponent...`;
+                listenToGame();
+            } catch (error) {
+                console.error("Error creating room:", error);
+                showLoading(false);
+                showMessage("Database Error", "Failed to create the room. Try again.");
+            }
+        }
+
+        async function joinRoom() {
             const roomId = roomIdInput.value.trim();
             if (!roomId) {
                 showMessage("Missing ID", "Please enter a Room ID to join.");
                 return;
             }
+
+            if (!userId) {
+                showMessage("Error", "User not authenticated. Please refresh the page.");
+                return;
+            }
+
             showLoading(true);
-            statusMessageElement.textContent = `Joining room ${roomId}...`;
-            mockSocket.emit('join_room', { roomId, player2Id: userId });
-        };
+            statusMessageElement.textContent = `Attempting to join room: ${roomId}...`;
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            const gameDocPath = `${publicDataPath}/${roomId}`;
+            gameDocRef = doc(db, gameDocPath);
+
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (!docSnap.exists()) {
+                    showMessage("Room Not Found", "The room ID you entered does not exist.");
+                    showLoading(false);
+                    return;
+                }
+
+                const gameData = docSnap.data();
+                if (gameData.status !== 'waiting') {
+                    showMessage("Room Unavailable", "This room is already in a game or finished. Try another ID.");
+                    showLoading(false);
+                    return;
+                }
+                if (gameData.player1Id === userId) {
+                    showMessage("Already in Room", "You are already in this room as Player 1.");
+                    listenToGame();
+                    return;
+                }
+
+                await updateDoc(gameDocRef, {
+                    player2Id: userId,
+                    status: 'playing',
+                });
+                
+                statusMessageElement.textContent = `Joined room: ${roomId}!`;
+                listenToGame();
+            } catch (error) {
+                console.error("Error joining room:", error);
+                showLoading(false);
+                showMessage("Database Error", "Failed to join the room. Try again.");
+            }
+        }
         
-        // Initial rendering of the empty board
-        renderBoard();
+        function listenToGame() {
+            if (unsubscribe) {
+                unsubscribe();
+            }
+            document.getElementById('game-options').style.display = 'none';
+            
+            unsubscribe = onSnapshot(gameDocRef, (doc) => {
+                if (!doc.exists()) {
+                    showMessage("Game Ended", "The game was deleted. Please find a new one.");
+                    location.reload();
+                    return;
+                }
+                
+                const gameData = doc.data();
+                const myColor = gameData.player1Id === userId ? 'red' : 'blue';
+                const myTurn = gameData.currentPlayer === myColor;
+                const opponentId = gameData.player1Id === userId ? gameData.player2Id : gameData.player1Id;
+
+                opponentIdElement.textContent = opponentId || "Waiting...";
+                
+                if (gameData.status === 'playing') {
+                    statusMessageElement.textContent = myTurn ? `It's your turn (${myColor})!` : `Waiting for opponent's move...`;
+                } else if (gameData.status === 'waiting') {
+                    statusMessageElement.textContent = "Waiting for an opponent...";
+                }
+
+                const { winner, combo } = checkWinner(gameData.board);
+                if (winner) {
+                    if (winner === 'draw') {
+                        statusMessageElement.textContent = "It's a draw!";
+                    } else {
+                        statusMessageElement.textContent = winner === myColor ? "You win!" : "You lose!";
+                    }
+                    
+                    renderBoard(gameData.board, myColor, false, combo);
+                    showMessage("Game Over", statusMessageElement.textContent + "\n\nFeel free to find another game.");
+                    document.getElementById('game-options').style.display = 'flex';
+                    showLoading(false);
+                    return;
+                }
+                
+                renderBoard(gameData.board, myColor, myTurn);
+                
+            }, (error) => {
+                console.error("Error listening to game changes:", error);
+                showMessage("Connection Error", "Lost connection to the game. Please reload.");
+            });
+        }
+        
+        // --- Start the App ---
+        window.onload = function() {
+            showLoading(true);
+            initFirebase();
+        };
+
     </script>
 </body>
 </html>
