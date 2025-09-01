@@ -3,127 +3,997 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Config Fix</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Color Clash</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --card-bg: #ffffff;
+            --primary-color: #4a5568;
+            --secondary-color: #718096;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --text-color: #1a202c;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.2s ease-in-out;
+        }
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            padding: 1rem;
+            padding: 16px;
+            box-sizing: border-box;
+            line-height: 1.6;
         }
-        .card {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 1.5rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            text-align: center;
-            max-width: 400px;
+
+        .container {
             width: 100%;
+            max-width: 600px;
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 32px;
+            text-align: center;
+            position: relative;
         }
-        .status-text {
+
+        h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+            position: relative;
+            display: inline-block;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-red));
+            border-radius: 2px;
+        }
+
+        .status-message {
+            font-size: 1.2rem;
+            min-height: 30px;
             font-weight: 600;
-            font-size: 1.25rem;
-            color: #4b5563;
+            color: var(--secondary-color);
+            margin-bottom: 24px;
+            padding: 8px 16px;
+            border-radius: var(--border-radius);
+            background-color: rgba(113, 128, 150, 0.1);
         }
-        .connected {
-            color: #10b981;
+
+        .user-info {
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+            margin-bottom: 24px;
+            word-wrap: break-word;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
-        .button {
-            background-color: #4f46e5;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.75rem;
-            font-weight: 500;
-            margin-top: 1.5rem;
+        
+        .user-info span {
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        
+        .id-label {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-gap: 8px;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto 24px;
+            position: relative;
+        }
+
+        .board::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: calc(var(--border-radius) + 5px);
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-red));
+            z-index: -1;
+            opacity: 0.7;
+            filter: blur(5px);
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #e2e8f0;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            position: relative;
+            overflow: hidden;
         }
+
+        .cell::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(239, 68, 68, 0.1));
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .cell:hover::before {
+            opacity: 1;
+        }
+
+        .cell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell.red {
+            background-color: var(--accent-red);
+            color: white;
+        }
+
+        .cell.blue {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+
+        .cell.win {
+            box-shadow: 0 0 15px var(--accent-red), inset 0 0 10px var(--accent-red);
+            animation: pulse-red 1s infinite alternate;
+        }
+        
+        .cell.win.blue {
+            box-shadow: 0 0 15px var(--accent-blue), inset 0 0 10px var(--accent-blue);
+            animation: pulse-blue 1s infinite alternate;
+        }
+
+        @keyframes pulse-red {
+            from { box-shadow: 0 0 15px var(--accent-red), inset 0 0 10px var(--accent-red); }
+            to { box-shadow: 0 0 25px var(--accent-red), inset 0 0 15px var(--accent-red); }
+        }
+
+        @keyframes pulse-blue {
+            from { box-shadow: 0 0 15px var(--accent-blue), inset 0 0 10px var(--accent-blue); }
+            to { box-shadow: 0 0 25px var(--accent-blue), inset 0 0 15px var(--accent-blue); }
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .button {
+            background-color: var(--primary-color);
+            color: var(--card-bg);
+            padding: 12px 24px;
+            border-radius: var(--border-radius);
+            border: none;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: var(--shadow);
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .button:hover::before {
+            left: 100%;
+        }
+
         .button:hover {
-            background-color: #4338ca;
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .button:disabled {
+            background-color: #e2e8f0;
+            color: var(--secondary-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .button.secondary {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 2px solid var(--primary-color);
+        }
+
+        .button.secondary:hover {
+            background-color: var(--primary-color);
+            color: var(--card-bg);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-group input {
+            padding: 10px 16px;
+            border-radius: var(--border-radius);
+            border: 1px solid #cbd5e0;
+            flex-grow: 1;
+            font-size: 1rem;
+            color: var(--text-color);
+            background-color: #f8fafc;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 4px solid var(--secondary-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal Styles */
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background-color: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            animation: modal-appear 0.3s ease-out;
+        }
+        
+        @keyframes modal-appear {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .modal-content h3 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+        }
+        .modal-content p {
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .game-controls {
+            display: flex;
+            justify-content: center;
+            margin-top: 16px;
+        }
+        
+        .copy-btn {
+            background: var(--secondary-color);
+            border: none;
+            border-radius: var(--border-radius);
+            color: white;
+            padding: 6px 12px;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .copy-btn:hover {
+            background: var(--primary-color);
+        }
+        
+        .copy-btn.copied {
+            background: #10b981;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .status-connected {
+            background-color: #10b981;
+        }
+        
+        .status-disconnected {
+            background-color: #ef4444;
+        }
+        
+        .status-connecting {
+            background-color: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1 class="text-2xl font-bold text-gray-800">Firebase Status</h1>
-        <p id="status" class="status-text mt-4">Connecting...</p>
-        <p id="appId" class="text-sm text-gray-500 mt-2"></p>
-        <button id="testButton" class="button">Show Message</button>
+    <div class="container">
+        <h1>Color Clash</h1>
+        
+        <div class="connection-status">
+            <span class="status-indicator status-connecting" id="connection-status"></span>
+            <span id="connection-text">Connecting...</span>
+        </div>
+        
+        <div class="user-info">
+            <p><span class="id-label">Your ID:</span> <span id="your-id">...</span></p>
+            <p><span class="id-label">Opponent's ID:</span> <span id="opponent-id">...</span></p>
+        </div>
+        <div id="loading" class="loading-spinner"></div>
+        <div class="status-message" id="status-message">Loading...</div>
+        <div id="board" class="board"></div>
+        
+        <div id="game-options" class="button-group">
+            <button id="find-game-button" class="button">Find a Random Game</button>
+            <div class="input-group">
+                <input type="text" id="room-id-input" placeholder="Enter Room ID">
+                <button class="copy-btn" id="copy-room-id" title="Copy Room ID">📋</button>
+            </div>
+            <div class="input-group">
+                <button id="create-room-button" class="button">Create Room</button>
+                <button id="join-room-button" class="button">Join Room</button>
+            </div>
+        </div>
+        
+        <div class="game-controls" id="in-game-controls" style="display: none;">
+            <button id="leave-game-button" class="button secondary">Leave Game</button>
+        </div>
+    </div>
+    
+    <!-- Custom Modal for user messages -->
+    <div id="game-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title"></h3>
+            <p id="modal-message"></p>
+            <div class="modal-buttons">
+                <button id="modal-ok-button" class="button">OK</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
+        // Mock Firebase configuration - replace with your actual config
+        const __app_id = 'color-clash-app';
+        const __firebase_config = JSON.stringify({
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        });
+        const __initial_auth_token = null;
+
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, addDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // IMPORTANT: The Firebase configuration is provided as a string via the __firebase_config variable.
-        // It must be parsed to be used as a JavaScript object.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        setLogLevel('debug'); // Enable Firestore debug logging
 
+        // Global variables for Firebase services
         let app;
         let db;
         let auth;
         let userId;
 
-        const statusText = document.getElementById('status');
-        const appIdText = document.getElementById('appId');
-        const testButton = document.getElementById('testButton');
+        // Custom variables for game state
+        let gameId = null;
+        let player = null;
+        let gameListener = null;
 
-        setLogLevel('debug');
+        // UI elements
+        const loadingSpinner = document.getElementById('loading');
+        const statusMessage = document.getElementById('status-message');
+        const boardElement = document.getElementById('board');
+        const yourIdElement = document.getElementById('your-id');
+        const opponentIdElement = document.getElementById('opponent-id');
+        const gameOptions = document.getElementById('game-options');
+        const findGameBtn = document.getElementById('find-game-button');
+        const createRoomBtn = document.getElementById('create-room-button');
+        const joinRoomBtn = document.getElementById('join-room-button');
+        const roomIdInput = document.getElementById('room-id-input');
+        const leaveGameBtn = document.getElementById('leave-game-button');
+        const inGameControls = document.getElementById('in-game-controls');
+        const copyRoomIdBtn = document.getElementById('copy-room-id');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionText = document.getElementById('connection-text');
 
+        // Modal elements
+        const modal = document.getElementById('game-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalOkBtn = document.getElementById('modal-ok-button');
+
+        // Function to show the custom modal
+        function showModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modal.style.display = 'flex';
+        }
+
+        // Function to hide the custom modal
+        function hideModal() {
+            modal.style.display = 'none';
+        }
+
+        // Update connection status UI
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                connectionStatus.className = 'status-indicator status-connected';
+                connectionText.textContent = 'Connected';
+            } else {
+                connectionStatus.className = 'status-indicator status-disconnected';
+                connectionText.textContent = 'Disconnected';
+            }
+        }
+
+        // Initialize Firebase and Authentication
         async function initFirebase() {
             try {
-                // Check if the firebase config is valid
-                if (!firebaseConfig.apiKey) {
-                    throw new Error("Firebase configuration not found or is invalid. Please check your environment.");
+                // Check if the global variables are defined
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey === 'your-api-key') {
+                    console.error("Firebase config is not available or not properly configured.");
+                    statusMessage.textContent = "Error: Firebase not configured. Game will run in demo mode.";
+                    initDemoMode();
+                    return;
                 }
 
-                // Initialize Firebase
+                // Initialize services
                 app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
                 db = getFirestore(app);
-
-                // Authenticate the user
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                appIdText.textContent = `App ID: ${appId}`;
-                statusText.textContent = 'Connected!';
-                statusText.classList.remove('text-gray-600');
-                statusText.classList.add('connected');
+                auth = getAuth(app);
+                
+                // Auth listener
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        yourIdElement.textContent = userId.substring(0, 8) + '...';
+                        statusMessage.textContent = "Ready to play! Find or create a game.";
+                        gameOptions.style.display = 'flex';
+                        loadingSpinner.style.display = 'none';
+                        updateConnectionStatus(true);
+                    } else {
+                        // User is signed out. Sign in anonymously if no token is available.
+                        try {
+                           if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                           } else {
+                                await signInAnonymously(auth);
+                           }
+                        } catch (error) {
+                            console.error("Error signing in:", error);
+                            statusMessage.textContent = "Error: Could not authenticate. Running in demo mode.";
+                            initDemoMode();
+                        }
+                    }
+                });
 
             } catch (error) {
-                console.error("Firebase Initialization Error:", error);
-                statusText.textContent = 'Connection Failed';
-                statusText.classList.remove('text-gray-600');
-                statusText.classList.add('text-red-500');
+                console.error("Firebase initialization failed:", error);
+                statusMessage.textContent = "Error initializing Firebase. Running in demo mode.";
+                initDemoMode();
+            }
+        }
+
+        // Demo mode for when Firebase is not available
+        function initDemoMode() {
+            userId = 'demo-' + Math.random().toString(36).substring(2, 9);
+            yourIdElement.textContent = userId.substring(0, 8) + '...';
+            statusMessage.textContent = "Demo Mode - Playing locally";
+            gameOptions.style.display = 'flex';
+            loadingSpinner.style.display = 'none';
+            updateConnectionStatus(false);
+            
+            // Set up local game handlers
+            setupLocalGame();
+        }
+
+        // Local game implementation for demo mode
+        function setupLocalGame() {
+            let currentPlayer = 'X';
+            let board = Array(9).fill(null);
+            let gameActive = true;
+            
+            // Render initial board
+            renderBoard(board);
+            
+            findGameBtn.addEventListener('click', () => {
+                showModal('Demo Mode', 'In demo mode, you can only play locally. Create a room to play against yourself.');
+            });
+            
+            createRoomBtn.addEventListener('click', () => {
+                gameId = 'demo-room';
+                player = 'X';
+                statusMessage.textContent = `Room created! ID: ${gameId}. Playing locally.`;
+                roomIdInput.value = gameId;
+                gameOptions.style.display = 'none';
+                inGameControls.style.display = 'flex';
+                board = Array(9).fill(null);
+                currentPlayer = 'X';
+                gameActive = true;
+                renderBoard(board);
+            });
+            
+            joinRoomBtn.addEventListener('click', () => {
+                const roomToJoin = roomIdInput.value.trim();
+                if (roomToJoin === 'demo-room') {
+                    gameId = 'demo-room';
+                    player = 'O';
+                    statusMessage.textContent = 'Joined demo room. Playing locally.';
+                    gameOptions.style.display = 'none';
+                    inGameControls.style.display = 'flex';
+                    board = Array(9).fill(null);
+                    currentPlayer = 'X';
+                    gameActive = true;
+                    renderBoard(board);
+                } else {
+                    showModal('Room Not Found', 'Only "demo-room" is available in demo mode.');
+                }
+            });
+            
+            // Handle cell clicks for local game
+            function handleLocalCellClick(event) {
+                if (!gameActive) return;
+                
+                const cellIndex = parseInt(event.target.dataset.index);
+                if (board[cellIndex] !== null) return;
+                
+                board[cellIndex] = currentPlayer;
+                renderBoard(board);
+                
+                const result = checkWinner(board);
+                if (result) {
+                    gameActive = false;
+                    if (result.winner === 'draw') {
+                        statusMessage.textContent = "It's a draw!";
+                        setTimeout(() => showModal('Game Over', "It's a draw!"), 500);
+                    } else {
+                        statusMessage.textContent = `${result.winner === 'X' ? 'Blue' : 'Red'} wins!`;
+                        highlightWinningCells(result.pattern, result.winner);
+                        setTimeout(() => showModal('Game Over', `${result.winner === 'X' ? 'Blue' : 'Red'} wins!`), 500);
+                    }
+                } else {
+                    currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                    statusMessage.textContent = `Current turn: ${currentPlayer === 'X' ? 'Blue' : 'Red'}`;
+                }
+            }
+            
+            // Add event listeners to cells
+            function addLocalCellListeners() {
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.removeEventListener('click', handleLocalCellClick);
+                    cell.addEventListener('click', handleLocalCellClick);
+                });
+            }
+            
+            // Initialize
+            addLocalCellListeners();
+        }
+
+        // Render the game board based on the game state
+        function renderBoard(boardState) {
+            boardElement.innerHTML = ''; // Clear previous board
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                
+                if (boardState[i] === 'X') {
+                    cell.classList.add('blue');
+                    cell.textContent = 'X';
+                } else if (boardState[i] === 'O') {
+                    cell.classList.add('red');
+                    cell.textContent = 'O';
+                }
+                
+                cell.dataset.index = i;
+                boardElement.appendChild(cell);
+            }
+        }
+
+        // Highlight winning cells
+        function highlightWinningCells(pattern, winner) {
+            if (!pattern) return;
+            
+            pattern.forEach(index => {
+                const cell = boardElement.children[index];
+                if (cell) {
+                    cell.classList.add('win', winner === 'X' ? 'blue' : 'red');
+                }
+            });
+        }
+
+        // Handle a cell click and update Firestore
+        async function handleCellClick(event) {
+            if (!gameId || !player) {
+                return; // Do nothing if not in a game
+            }
+            const cellIndex = event.target.dataset.index;
+            const gameRef = doc(db, 'artifacts', __app_id, 'public', 'data', 'games', gameId);
+            
+            try {
+                const gameSnap = await getDoc(gameRef);
+                if (gameSnap.exists()) {
+                    const gameData = gameSnap.data();
+                    // Check if it's the current player's turn and the cell is empty
+                    if (gameData.currentTurn === player && gameData.board[cellIndex] === null && !gameData.winner) {
+                        const newBoard = [...gameData.board];
+                        newBoard[cellIndex] = player;
+                        const newTurn = player === 'X' ? 'O' : 'X';
+
+                        await updateDoc(gameRef, {
+                            board: newBoard,
+                            currentTurn: newTurn
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Error updating game state:", e);
+                showModal('Error', 'Failed to update game state. Please try again.');
+            }
+        }
+
+        // Check for a winning condition
+        function checkWinner(board) {
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                [0, 4, 8], [2, 4, 6]            // Diagonals
+            ];
+
+            for (const pattern of winPatterns) {
+                const [a, b, c] = pattern;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return { winner: board[a], pattern: pattern };
+                }
+            }
+            
+            // Check for a draw
+            if (board.every(cell => cell !== null)) {
+                return { winner: 'draw', pattern: null };
+            }
+            
+            return null;
+        }
+
+        // Update UI based on game state
+        async function updateUI(gameData) {
+            renderBoard(gameData.board);
+            
+            if (gameData.winner) {
+                if (gameData.winner === 'draw') {
+                    statusMessage.textContent = 'It\'s a draw!';
+                } else {
+                    statusMessage.textContent = `${gameData.winner === 'X' ? 'Blue' : 'Red'} wins!`;
+                    // Apply win animation
+                    if (gameData.winPattern) {
+                        highlightWinningCells(gameData.winPattern, gameData.winner);
+                    }
+                }
+                setTimeout(() => {
+                    showModal('Game Over!', statusMessage.textContent);
+                    gameOptions.style.display = 'flex';
+                    inGameControls.style.display = 'none';
+                    gameId = null;
+                    player = null;
+                    opponentIdElement.textContent = '...';
+                }, 1000);
+            } else {
+                statusMessage.textContent = `Current turn: ${gameData.currentTurn === 'X' ? 'Blue' : 'Red'}`;
+            }
+            
+            // Hide game options when game is active
+            if (gameData.player1 && gameData.player2 && !gameData.winner) {
+                gameOptions.style.display = 'none';
+                inGameControls.style.display = 'flex';
             }
         }
         
-        testButton.addEventListener('click', () => {
-            if (userId) {
-                const message = `Hello, your User ID is ${userId}.`;
-                statusText.textContent = message;
-                statusText.classList.remove('connected');
-                statusText.classList.add('text-gray-600');
-            } else {
-                statusText.textContent = 'User not authenticated.';
+        // Listen for real-time updates to a specific game document
+        function listenToGame(gameIdToListen) {
+            if (gameListener) {
+                gameListener(); // Unsubscribe from previous listener
+            }
+
+            const gameRef = doc(db, 'artifacts', __app_id, 'public', 'data', 'games', gameIdToListen);
+
+            gameListener = onSnapshot(gameRef, async (docSnap) => {
+                if (docSnap.exists()) {
+                    const gameData = docSnap.data();
+                    
+                    // Update opponent ID if they join
+                    if (gameData.player1 && gameData.player2) {
+                        const opponentId = gameData.player1 === userId ? gameData.player2 : gameData.player1;
+                        opponentIdElement.textContent = opponentId.substring(0, 8) + '...';
+                    }
+
+                    // Check for a winner or draw
+                    const result = checkWinner(gameData.board);
+                    if (result && !gameData.winner) {
+                        await updateDoc(gameRef, {
+                            winner: result.winner,
+                            winPattern: result.pattern
+                        });
+                    } else {
+                        updateUI(gameData);
+                    }
+                } else {
+                    // Game was deleted
+                    showModal('Game Ended', 'The room you were in no longer exists.');
+                    gameOptions.style.display = 'flex';
+                    inGameControls.style.display = 'none';
+                    gameId = null;
+                    player = null;
+                    opponentIdElement.textContent = '...';
+                    renderBoard(Array(9).fill(null));
+                }
+            });
+        }
+
+        // Leave the current game
+        async function leaveGame() {
+            if (gameId) {
+                try {
+                    const gameRef = doc(db, 'artifacts', __app_id, 'public', 'data', 'games', gameId);
+                    const gameSnap = await getDoc(gameRef);
+                    
+                    if (gameSnap.exists()) {
+                        const gameData = gameSnap.data();
+                        
+                        // If the game is still active, delete it if you're the only player
+                        // or remove yourself if there are two players
+                        if (!gameData.player2) {
+                            await deleteDoc(gameRef);
+                        } else if (gameData.winner) {
+                            // Game already ended, just navigate away
+                        } else {
+                            // For simplicity, we'll just navigate away in demo mode
+                            // In a real implementation, you'd update the game state
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error leaving game:", e);
+                }
+            }
+            
+            // Reset UI
+            gameOptions.style.display = 'flex';
+            inGameControls.style.display = 'none';
+            gameId = null;
+            player = null;
+            opponentIdElement.textContent = '...';
+            statusMessage.textContent = 'Ready to play! Find or create a game.';
+            renderBoard(Array(9).fill(null));
+            
+            if (gameListener) {
+                gameListener();
+                gameListener = null;
+            }
+        }
+
+        // --- Button Click Handlers ---
+        
+        // Find a random available game
+        findGameBtn.addEventListener('click', async () => {
+            statusMessage.textContent = 'Searching for an available game...';
+            loadingSpinner.style.display = 'block';
+            
+            try {
+                // Query for games with only one player
+                const gamesCollection = collection(db, 'artifacts', __app_id, 'public', 'data', 'games');
+                const q = query(gamesCollection, where('player2', '==', null));
+                const querySnap = await getDocs(q);
+
+                if (!querySnap.empty) {
+                    const gameDoc = querySnap.docs[0];
+                    gameId = gameDoc.id;
+                    player = 'O'; // Join as player O
+                    
+                    await updateDoc(gameDoc.ref, {
+                        player2: userId
+                    });
+
+                    statusMessage.textContent = 'Found a game! Joining...';
+                    listenToGame(gameId);
+                } else {
+                    // No games found, create a new one instead
+                    await createRoom();
+                }
+
+            } catch (e) {
+                console.error("Error finding game:", e);
+                showModal('Error', 'Failed to find a game. Please try again.');
+            } finally {
+                loadingSpinner.style.display = 'none';
             }
         });
 
-        // Initialize Firebase on window load
+        // Create a new room
+        createRoomBtn.addEventListener('click', async () => {
+            await createRoom();
+        });
+
+        async function createRoom() {
+            statusMessage.textContent = 'Creating a new room...';
+            loadingSpinner.style.display = 'block';
+
+            try {
+                const gamesCollection = collection(db, 'artifacts', __app_id, 'public', 'data', 'games');
+                const newGameRef = await addDoc(gamesCollection, {
+                    player1: userId,
+                    player2: null,
+                    board: Array(9).fill(null),
+                    currentTurn: 'X',
+                    winner: null,
+                    winPattern: null,
+                });
+                gameId = newGameRef.id;
+                player = 'X'; // Creator is always player X
+                
+                statusMessage.textContent = `Room created! ID: ${gameId}. Share this ID with a friend!`;
+                roomIdInput.value = gameId; // Display the new room ID
+                
+                listenToGame(gameId);
+            } catch (e) {
+                console.error("Error creating room:", e);
+                showModal('Error', 'Failed to create a new room. Please try again.');
+            } finally {
+                loadingSpinner.style.display = 'none';
+            }
+        }
+
+        // Join an existing room
+        joinRoomBtn.addEventListener('click', async () => {
+            const roomToJoin = roomIdInput.value.trim();
+            if (!roomToJoin) {
+                showModal('Invalid Room ID', 'Please enter a valid room ID to join.');
+                return;
+            }
+
+            statusMessage.textContent = `Attempting to join room ${roomToJoin}...`;
+            loadingSpinner.style.display = 'block';
+
+            try {
+                const gameRef = doc(db, 'artifacts', __app_id, 'public', 'data', 'games', roomToJoin);
+                const gameSnap = await getDoc(gameRef);
+
+                if (gameSnap.exists() && !gameSnap.data().player2) {
+                    gameId = gameSnap.id;
+                    player = 'O'; // Join as player O
+                    
+                    await updateDoc(gameRef, {
+                        player2: userId
+                    });
+
+                    statusMessage.textContent = 'Successfully joined the game!';
+                    listenToGame(gameId);
+                } else {
+                    showModal('Room Not Found', 'That room does not exist or is already full.');
+                }
+            } catch (e) {
+                console.error("Error joining room:", e);
+                showModal('Error', 'Failed to join the room. Please check the ID and try again.');
+            } finally {
+                loadingSpinner.style.display = 'none';
+            }
+        });
+        
+        // Copy room ID to clipboard
+        copyRoomIdBtn.addEventListener('click', () => {
+            if (roomIdInput.value) {
+                roomIdInput.select();
+                document.execCommand('copy');
+                copyRoomIdBtn.textContent = '✓ Copied!';
+                copyRoomIdBtn.classList.add('copied');
+                setTimeout(() => {
+                    copyRoomIdBtn.textContent = '📋';
+                    copyRoomIdBtn.classList.remove('copied');
+                }, 2000);
+            }
+        });
+        
+        // Leave game button
+        leaveGameBtn.addEventListener('click', leaveGame);
+        
+        // Event listeners for modal
+        modalOkBtn.addEventListener('click', hideModal);
+
+        // Start the application
         window.onload = initFirebase;
     </script>
 </body>
