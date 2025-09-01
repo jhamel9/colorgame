@@ -302,9 +302,9 @@
 
         async function initFirebase() {
             if (!firebaseConfig) {
-                console.error("Firebase config is not available. Check your environment setup.");
+                console.error("Firebase config is not available. This is a setup error.");
                 showLoading(false);
-                showMessage("Setup Error", "Firebase configuration is missing.");
+                showMessage("Setup Error", "Firebase configuration is missing. The app cannot connect to the database.");
                 return;
             }
 
