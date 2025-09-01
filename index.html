@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Color Clash</title>
+  <title>Color Clash - Multiplayer</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -170,6 +170,25 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    /* Connection status indicator */
+    .connection-status {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444;
+    }
+    .status-dot.connected {
+      background-color: #10b981;
+    }
     /* Modal for messages */
     .modal {
       display: none;
@@ -208,6 +227,22 @@
     #restart-game-button:hover {
       background-color: #dc2626;
     }
+    .hidden {
+      display: none;
+    }
+    .qr-code {
+      margin: 20px auto;
+      padding: 10px;
+      background: white;
+      display: inline-block;
+    }
+    .share-link {
+      margin: 15px 0;
+      padding: 10px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      word-break: break-all;
+    }
   </style>
 
   <!-- Firebase SDK -->
@@ -216,6 +251,11 @@
 </head>
 <body>
   <div class="container">
+    <div class="connection-status">
+      <span id="connection-status-dot" class="status-dot"></span>
+      <span id="connection-status-text">Disconnected</span>
+    </div>
+    
     <h1>Color Clash</h1>
     <div class="user-info">
       <p><span class="id-label">Your ID:</span> <span id="your-id">...</span></p>
@@ -224,7 +264,19 @@
     </div>
     <div id="loading" class="loading-spinner"></div>
     <div class="status-message" id="game-status">Connecting to the game...</div>
-    <div id="board" class="board"></div>
+    
+    <div id="board" class="board">
+      <div class="cell" data-index="0"></div>
+      <div class="cell" data-index="1"></div>
+      <div class="cell" data-index="2"></div>
+      <div class="cell" data-index="3"></div>
+      <div class="cell" data-index="4"></div>
+      <div class="cell" data-index="5"></div>
+      <div class="cell" data-index="6"></div>
+      <div class="cell" data-index="7"></div>
+      <div class="cell" data-index="8"></div>
+    </div>
+    
     <div class="button-group">
       <button id="find-game-button" class="button">Find a Game</button>
       <div class="input-group">
@@ -233,6 +285,7 @@
       </div>
       <button id="create-room-button" class="button">Create Room</button>
       <button id="restart-game-button" class="button hidden">Restart Game</button>
+      <button id="share-game-button" class="button hidden">Share Game</button>
     </div>
   </div>
 
@@ -241,13 +294,17 @@
     <div class="modal-content">
       <h3 id="modal-title"></h3>
       <p id="modal-message"></p>
+      <div id="share-section" class="hidden">
+        <div class="share-link" id="game-link"></div>
+        <button id="copy-link-button" class="button">Copy Link</button>
+      </div>
       <button id="modal-close-button" class="button">Close</button>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getDatabase, ref, set, push, onValue, off, get } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getDatabase, ref, set, push, onValue, off, get, onDisconnect, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
     // Firebase Config
     const firebaseConfig = {
@@ -271,34 +328,72 @@
     let currentRoomId = null;
     let unlistenBoard = null;
     let unlistenRoom = null;
+    let unlistenConnection = null;
 
     // UI Elements
     const boardSquares = document.querySelectorAll(".cell");
     const statusMessage = document.getElementById("game-status");
     const restartBtn = document.getElementById("restart-game-button");
+    const shareBtn = document.getElementById("share-game-button");
     const loadingSpinner = document.getElementById("loading");
     const turnText = document.getElementById("current-turn");
     const roomIdInput = document.getElementById("room-id-input");
+    const connectionStatusDot = document.getElementById("connection-status-dot");
+    const connectionStatusText = document.getElementById("connection-status-text");
 
     // Modal Elements
     const modal = document.getElementById("custom-modal");
     const modalTitle = document.getElementById("modal-title");
     const modalMessage = document.getElementById("modal-message");
     const modalCloseBtn = document.getElementById("modal-close-button");
+    const shareSection = document.getElementById("share-section");
+    const gameLink = document.getElementById("game-link");
+    const copyLinkBtn = document.getElementById("copy-link-button");
+
+    // Monitor connection status
+    function monitorConnection() {
+      const connectedRef = ref(db, ".info/connected");
+      unlistenConnection = onValue(connectedRef, (snap) => {
+        if (snap.val() === true) {
+          connectionStatusDot.classList.add("connected");
+          connectionStatusText.textContent = "Connected";
+        } else {
+          connectionStatusDot.classList.remove("connected");
+          connectionStatusText.textContent = "Disconnected";
+        }
+      });
+    }
 
     /**
      * Shows a custom modal with a message and optional input.
      * @param {string} title - The title of the modal.
      * @param {string} message - The message to display.
+     * @param {boolean} showShare - Whether to show the share section.
      */
-    function showModal(title, message) {
+    function showModal(title, message, showShare = false) {
       modalTitle.textContent = title;
       modalMessage.textContent = message;
+      shareSection.classList.toggle('hidden', !showShare);
+      
+      if (showShare && currentRoomId) {
+        const url = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
+        gameLink.textContent = url;
+      }
+      
       modal.style.display = 'flex';
     }
 
     modalCloseBtn.addEventListener('click', () => {
       modal.style.display = 'none';
+    });
+    
+    copyLinkBtn.addEventListener('click', () => {
+      const url = gameLink.textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        alert("Game link copied to clipboard!");
+      }).catch(err => {
+        console.error('Could not copy text: ', err);
+      });
     });
     
     /** Resets the UI to the initial state. */
@@ -310,9 +405,10 @@
         sq.className = 'cell';
       });
       document.getElementById("opponent-id").textContent = "...";
-      statusMessage.textContent = "Connecting to the game...";
+      statusMessage.textContent = "Connect to a game";
       turnText.textContent = "...";
       restartBtn.classList.add('hidden');
+      shareBtn.classList.add('hidden');
       loadingSpinner.style.display = 'none';
       document.getElementById("find-game-button").disabled = false;
       document.getElementById("create-room-button").disabled = false;
@@ -339,16 +435,26 @@
         return;
       }
       
+      // Set up onDisconnect to clean up room if creator leaves
+      onDisconnect(roomRef).remove();
+      
       set(roomRef, {
-        players: { [playerId]: true },
+        players: { 
+          [playerId]: {
+            joined: serverTimestamp(),
+            status: 'active'
+          } 
+        },
         turn: playerId,
         board: Array(9).fill(null),
         status: 'waiting',
-        createdAt: Date.now()
+        createdAt: serverTimestamp()
       });
+      
       currentRoomId = roomId;
       listenRoom(currentRoomId);
-      showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend!`);
+      shareBtn.classList.remove('hidden');
+      showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend!`, true);
     }
 
     /**
@@ -356,27 +462,49 @@
      * @param {string} roomId - The ID of the room to join.
      * @param {string} playerId - The ID of the player joining.
      */
-    function joinRoom(roomId, playerId) {
+    async function joinRoom(roomId, playerId) {
       resetUI();
-      const roomPlayersRef = ref(db, "rooms/" + roomId + "/players");
-      get(roomPlayersRef).then(snapshot => {
-        if (snapshot.exists() && Object.keys(snapshot.val()).length < 2) {
-          const players = snapshot.val();
-          if (players && !players[playerId]) {
-            set(ref(db, `rooms/${roomId}/players/${playerId}`), true);
-            currentRoomId = roomId;
-            listenRoom(roomId);
-            showModal("Joined Room!", `You have joined room: ${roomId}`);
-          } else {
-            showModal("Error", "Room is full or you are already in it.");
-          }
-        } else {
-          showModal("Error", "Room not found or is already full.");
+      const roomRef = ref(db, "rooms/" + roomId);
+      
+      try {
+        const snapshot = await get(roomRef);
+        
+        if (!snapshot.exists()) {
+          showModal("Error", "Room not found. Please check the ID.");
+          return;
         }
-      }).catch(error => {
-        console.error(error);
-        showModal("Error", "Could not join room. Please check the ID.");
-      });
+        
+        const room = snapshot.val();
+        const players = room.players || {};
+        
+        if (Object.keys(players).length >= 2) {
+          showModal("Error", "Room is full. Only 2 players allowed per room.");
+          return;
+        }
+        
+        if (players[playerId]) {
+          showModal("Error", "You are already in this room.");
+          return;
+        }
+        
+        // Add player to room
+        await set(ref(db, `rooms/${roomId}/players/${playerId}`), {
+          joined: serverTimestamp(),
+          status: 'active'
+        });
+        
+        // Set up onDisconnect to remove player if they leave
+        onDisconnect(ref(db, `rooms/${roomId}/players/${playerId}`)).remove();
+        
+        currentRoomId = roomId;
+        listenRoom(roomId);
+        shareBtn.classList.remove('hidden');
+        showModal("Joined Room!", `You have joined room: ${roomId}`);
+        
+      } catch (error) {
+        console.error("Error joining room:", error);
+        showModal("Error", "Could not join room. Please check your connection and try again.");
+      }
     }
 
     /**
@@ -389,10 +517,12 @@
         const room = snapshot.val();
         if (room) {
           const players = room.players || {};
-          const names = Object.keys(players).filter(p => p !== yourPlayerId);
-          document.getElementById("opponent-id").textContent = names.join(", ") || "...";
+          const playerIds = Object.keys(players);
+          const opponentId = playerIds.find(id => id !== yourPlayerId);
+          
+          document.getElementById("opponent-id").textContent = opponentId || "Waiting...";
 
-          if (Object.keys(players).length === 2 && room.status === 'waiting') {
+          if (playerIds.length === 2 && room.status === 'waiting') {
             set(ref(db, `rooms/${roomId}/status`), 'playing');
             listenBoard(roomId);
           }
@@ -403,15 +533,24 @@
           
           if (room.winner) {
             statusMessage.textContent = room.winner === yourPlayerId ? "You Win!" : "You Lose!";
-            statusMessage.classList.add(room.winner === yourPlayerId ? 'text-blue-500' : 'text-red-500');
             restartBtn.classList.remove('hidden');
           } else if (room.status === 'draw') {
             statusMessage.textContent = "It's a Draw!";
             restartBtn.classList.remove('hidden');
           } else if (room.status === 'playing') {
-            statusMessage.textContent = "";
+            statusMessage.textContent = "Game in progress";
+          } else if (room.status === 'waiting') {
+            statusMessage.textContent = "Waiting for opponent...";
           }
+        } else {
+          // Room was deleted (probably by the other player)
+          showModal("Room Closed", "The room has been closed by the other player.");
+          resetUI();
         }
+      }, (error) => {
+        console.error("Error listening to room:", error);
+        showModal("Connection Error", "Could not connect to the room. Please try again.");
+        resetUI();
       });
     }
     
@@ -452,7 +591,20 @@
         } else if (!board.includes(null)) {
           set(ref(db, `rooms/${roomId}/status`), 'draw');
         }
+      }, (error) => {
+        console.error("Error listening to board:", error);
       });
+    }
+
+    // Check if there's a room ID in the URL
+    function checkUrlForRoomId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('room');
+      if (roomId) {
+        roomIdInput.value = roomId;
+        showModal("Join Room?", `You have been invited to join room ${roomId}. Would you like to join?`, false);
+        // For simplicity, we'll just prefill the input
+      }
     }
 
     // Button Actions
@@ -486,7 +638,7 @@
         if (rooms) {
           for (const roomId in rooms) {
             const room = rooms[roomId];
-            if (room.players && Object.keys(room.players).length === 1) {
+            if (room.players && Object.keys(room.players).length === 1 && room.status === 'waiting') {
               await joinRoom(roomId, yourPlayerId);
               foundGame = true;
               break;
@@ -505,28 +657,42 @@
     document.getElementById("restart-game-button").addEventListener("click", () => {
       if (currentRoomId) {
         set(ref(db, `rooms/${currentRoomId}`), {
-          players: { [yourPlayerId]: true },
+          players: { 
+            [yourPlayerId]: {
+              joined: serverTimestamp(),
+              status: 'active'
+            } 
+          },
           turn: yourPlayerId,
           board: Array(9).fill(null),
           status: 'waiting',
-          createdAt: Date.now()
+          createdAt: serverTimestamp()
         });
         restartBtn.classList.add('hidden');
         statusMessage.textContent = "";
-        showModal("Game Restarted", "You have restarted the game!");
       } else {
         showModal("Error", "No active game to restart.");
       }
     });
 
+    document.getElementById("share-game-button").addEventListener("click", () => {
+      if (currentRoomId) {
+        showModal("Share Game", `Share this link with a friend to play together:`, true);
+      } else {
+        showModal("Error", "You need to create or join a room first.");
+      }
+    });
+
     // Board Click Listener
-    boardSquares.forEach((square, idx) => {
+    boardSquares.forEach((square) => {
       square.addEventListener("click", () => {
         if (!currentRoomId) {
           showModal("Action Blocked", "Please create or join a room first!");
           return;
         }
 
+        const idx = parseInt(square.getAttribute('data-index'));
+        
         const roomRef = ref(db, `rooms/${currentRoomId}`);
         get(roomRef).then(snapshot => {
           const room = snapshot.val();
@@ -536,17 +702,24 @@
             const players = Object.keys(room.players);
             const nextPlayer = players.find(id => id !== yourPlayerId);
             updates['turn'] = nextPlayer;
-            set(roomRef, { ...room, ...updates });
+            set(ref(db, `rooms/${currentRoomId}`), { ...room, ...updates });
           } else if (room.winner || room.status === 'draw') {
              showModal("Game Over", "The game has already ended. Please restart to play again.");
           } else if (room.turn !== yourPlayerId) {
             showModal("Wait Your Turn", "It is not your turn to play.");
-          } else if (room.board[idx]) {
+          } else if (room.board && room.board[idx]) {
             showModal("Invalid Move", "This square is already taken.");
           }
+        }).catch(error => {
+          console.error("Error making move:", error);
+          showModal("Error", "Could not make your move. Please check your connection.");
         });
       });
     });
+
+    // Initialize
+    monitorConnection();
+    checkUrlForRoomId();
   </script>
 </body>
 </html>
