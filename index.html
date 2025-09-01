@@ -70,6 +70,11 @@
             font-weight: 700;
             color: var(--text-color);
         }
+        
+        .id-label {
+            display: inline-block;
+            margin-right: 8px;
+        }
 
         .board {
             display: grid;
@@ -109,8 +114,8 @@
         }
         
         .cell.win.blue {
-             box-shadow: 0 0 15px var(--accent-blue), inset 0 0 10px var(--accent-blue);
-             animation: pulse-blue 1s infinite alternate;
+            box-shadow: 0 0 15px var(--accent-blue), inset 0 0 10px var(--accent-blue);
+            animation: pulse-blue 1s infinite alternate;
         }
 
         @keyframes pulse-red {
@@ -121,6 +126,13 @@
         @keyframes pulse-blue {
             from { box-shadow: 0 0 15px var(--accent-blue), inset 0 0 10px var(--accent-blue); }
             to { box-shadow: 0 0 25px var(--accent-blue), inset 0 0 15px var(--accent-blue); }
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 16px;
         }
 
         .button {
@@ -134,6 +146,7 @@
             cursor: pointer;
             transition: var(--transition);
             box-shadow: var(--shadow);
+            width: 100%;
         }
 
         .button:hover {
@@ -147,6 +160,23 @@
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-group input {
+            padding: 10px 16px;
+            border-radius: var(--border-radius);
+            border: 1px solid #cbd5e0;
+            flex-grow: 1;
+            font-size: 1rem;
+            color: var(--text-color);
+            background-color: #f8fafc;
         }
 
         .loading-spinner {
@@ -208,13 +238,23 @@
     <div class="container">
         <h1>Color Clash</h1>
         <div class="user-info">
-            <p>Your ID: <span id="your-id">...</span></p>
-            <p>Opponent's ID: <span id="opponent-id">...</span></p>
+            <p><span class="id-label">Your ID:</span> <span id="your-id">...</span></p>
+            <p><span class="id-label">Opponent's ID:</span> <span id="opponent-id">...</span></p>
         </div>
         <div id="loading" class="loading-spinner"></div>
         <div class="status-message" id="status-message">Connecting to the game...</div>
         <div id="board" class="board"></div>
-        <button id="find-game-button" class="button">Find a Game</button>
+        
+        <div id="game-options" class="button-group">
+            <button id="find-game-button" class="button">Find a Game</button>
+            <div class="input-group">
+                <input type="text" id="room-id-input" placeholder="Enter Room ID">
+            </div>
+            <div class="input-group">
+                <button id="create-room-button" class="button">Create Room</button>
+                <button id="join-room-button" class="button">Join Room</button>
+            </div>
+        </div>
     </div>
 
     <!-- Custom Modal for Messages -->
@@ -234,7 +274,7 @@
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, query, where, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, collection, query, where, addDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Log to debug Firebase issues
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -245,6 +285,9 @@
         const boardElement = document.getElementById('board');
         const statusMessageElement = document.getElementById('status-message');
         const findGameButton = document.getElementById('find-game-button');
+        const createRoomButton = document.getElementById('create-room-button');
+        const joinRoomButton = document.getElementById('join-room-button');
+        const roomIdInput = document.getElementById('room-id-input');
         const yourIdElement = document.getElementById('your-id');
         const opponentIdElement = document.getElementById('opponent-id');
         const loadingSpinner = document.getElementById('loading');
@@ -283,15 +326,25 @@
                         userId = user.uid;
                         yourIdElement.textContent = userId;
                         showLoading(false);
-                        statusMessageElement.textContent = "Ready to play! Find an opponent.";
+                        statusMessageElement.textContent = "Ready to play! Find or create a game.";
+                        
                         findGameButton.disabled = false;
+                        createRoomButton.disabled = false;
+                        joinRoomButton.disabled = false;
+
                         findGameButton.onclick = findOrCreateGame;
+                        createRoomButton.onclick = createRoom;
+                        joinRoomButton.onclick = joinRoom;
+
                     } else {
                         console.log("User is signed out or not authenticated.");
                         yourIdElement.textContent = "N/A";
                         showLoading(false);
                         statusMessageElement.textContent = "Authentication failed. Please refresh.";
+                        
                         findGameButton.disabled = true;
+                        createRoomButton.disabled = true;
+                        joinRoomButton.disabled = true;
                     }
                 });
 
@@ -312,7 +365,7 @@
                 if (color !== 'empty') {
                     cell.classList.add(color);
                 }
-                if (myTurn && color === 'empty') {
+                if (myTurn && color === 'empty' && gameDocRef) {
                     cell.onclick = () => handleCellClick(index, myColor);
                 }
                 
@@ -328,8 +381,12 @@
         async function handleCellClick(index, myColor) {
             if (!gameDocRef) return;
 
-            // Optimistic UI update
-            const board = (await getDoc(gameDocRef)).data().board;
+            const gameDoc = await getDoc(gameDocRef);
+            if (!gameDoc.exists()) {
+                showMessage("Game Error", "The game no longer exists.");
+                return;
+            }
+            const board = gameDoc.data().board;
             if (board[index] !== 'empty') return;
             
             board[index] = myColor;
@@ -339,12 +396,9 @@
                 await updateDoc(gameDocRef, {
                     board: board,
                     currentPlayer: nextTurn,
-                    // The onSnapshot listener will handle the UI update
                 });
             } catch (error) {
                 console.error("Error updating board: ", error);
-                // Revert optimistic update if there's an error
-                board[index] = 'empty'; 
             }
         }
 
@@ -364,6 +418,8 @@
         function showLoading(show) {
             loadingSpinner.style.display = show ? 'block' : 'none';
             findGameButton.disabled = show;
+            createRoomButton.disabled = show;
+            joinRoomButton.disabled = show;
         }
 
         function showMessage(title, text) {
@@ -379,13 +435,12 @@
                 showMessage("Error", "User not authenticated. Please refresh the page.");
                 return;
             }
-
+            
             showLoading(true);
-            findGameButton.disabled = true;
             statusMessageElement.textContent = "Searching for an open game...";
-
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            
             try {
-                const publicDataPath = `/artifacts/${appId}/public/data/games`;
                 const q = query(collection(db, publicDataPath), where("status", "==", "waiting"));
                 const querySnapshot = await getDocs(q);
 
@@ -417,8 +472,104 @@
             } catch (error) {
                 console.error("Error finding or creating game:", error);
                 showLoading(false);
-                findGameButton.disabled = false;
                 showMessage("Database Error", "Could not connect to the game server. Try again.");
+            }
+        }
+        
+        async function createRoom() {
+            const roomId = roomIdInput.value.trim();
+            if (!roomId) {
+                showMessage("Missing ID", "Please enter a Room ID to create.");
+                return;
+            }
+
+            if (!userId) {
+                showMessage("Error", "User not authenticated. Please refresh the page.");
+                return;
+            }
+
+            showLoading(true);
+            statusMessageElement.textContent = `Creating room: ${roomId}...`;
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            const gameDocPath = `${publicDataPath}/${roomId}`;
+            gameDocRef = doc(db, gameDocPath);
+
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (docSnap.exists()) {
+                    showMessage("Room Exists", "This room ID is already taken. Please choose another one.");
+                    showLoading(false);
+                    return;
+                }
+
+                const newGame = {
+                    board: Array(9).fill('empty'),
+                    player1Id: userId,
+                    player2Id: null,
+                    status: 'waiting',
+                    currentPlayer: 'red',
+                    winner: null
+                };
+                await setDoc(gameDocRef, newGame);
+                
+                statusMessageElement.textContent = `Room "${roomId}" created. Waiting for an opponent...`;
+                listenToGame();
+            } catch (error) {
+                console.error("Error creating room:", error);
+                showLoading(false);
+                showMessage("Database Error", "Failed to create the room. Try again.");
+            }
+        }
+
+        async function joinRoom() {
+            const roomId = roomIdInput.value.trim();
+            if (!roomId) {
+                showMessage("Missing ID", "Please enter a Room ID to join.");
+                return;
+            }
+
+            if (!userId) {
+                showMessage("Error", "User not authenticated. Please refresh the page.");
+                return;
+            }
+
+            showLoading(true);
+            statusMessageElement.textContent = `Attempting to join room: ${roomId}...`;
+            const publicDataPath = `/artifacts/${appId}/public/data/games`;
+            const gameDocPath = `${publicDataPath}/${roomId}`;
+            gameDocRef = doc(db, gameDocPath);
+
+            try {
+                const docSnap = await getDoc(gameDocRef);
+                if (!docSnap.exists()) {
+                    showMessage("Room Not Found", "The room ID you entered does not exist.");
+                    showLoading(false);
+                    return;
+                }
+
+                const gameData = docSnap.data();
+                if (gameData.status !== 'waiting') {
+                    showMessage("Room Unavailable", "This room is already in a game or finished. Try another ID.");
+                    showLoading(false);
+                    return;
+                }
+                if (gameData.player1Id === userId) {
+                    showMessage("Already in Room", "You are already in this room as Player 1.");
+                    listenToGame();
+                    return;
+                }
+
+                await updateDoc(gameDocRef, {
+                    player2Id: userId,
+                    status: 'playing',
+                });
+                
+                statusMessageElement.textContent = `Joined room: ${roomId}!`;
+                listenToGame();
+            } catch (error) {
+                console.error("Error joining room:", error);
+                showLoading(false);
+                showMessage("Database Error", "Failed to join the room. Try again.");
             }
         }
         
@@ -426,7 +577,7 @@
             if (unsubscribe) {
                 unsubscribe();
             }
-            findGameButton.style.display = 'none';
+            document.getElementById('game-options').style.display = 'none';
             
             unsubscribe = onSnapshot(gameDocRef, (doc) => {
                 if (!doc.exists()) {
@@ -440,7 +591,7 @@
                 const myTurn = gameData.currentPlayer === myColor;
                 const opponentId = gameData.player1Id === userId ? gameData.player2Id : gameData.player1Id;
 
-                opponentIdElement.textContent = opponentId ? opponentId.substring(0, 8) + '...' : "Waiting...";
+                opponentIdElement.textContent = opponentId || "Waiting...";
                 
                 if (gameData.status === 'playing') {
                     statusMessageElement.textContent = myTurn ? `It's your turn (${myColor})!` : `Waiting for opponent's move...`;
@@ -448,21 +599,18 @@
                     statusMessageElement.textContent = "Waiting for an opponent...";
                 }
 
-                // Check for winner
                 const { winner, combo } = checkWinner(gameData.board);
                 if (winner) {
                     if (winner === 'draw') {
                         statusMessageElement.textContent = "It's a draw!";
                     } else {
                         statusMessageElement.textContent = winner === myColor ? "You win!" : "You lose!";
-                        gameData.winner = winner;
                     }
-                    gameData.status = 'finished';
-                    // Re-render the board with winning cells highlighted
+                    
                     renderBoard(gameData.board, myColor, false, combo);
                     showMessage("Game Over", statusMessageElement.textContent + "\n\nFeel free to find another game.");
-                    findGameButton.style.display = 'block';
-                    findGameButton.disabled = false;
+                    document.getElementById('game-options').style.display = 'flex';
+                    showLoading(false);
                     return;
                 }
                 
