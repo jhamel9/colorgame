@@ -267,7 +267,7 @@
     </div>
 
     <script type="module">
-        // Global variables provided by the environment
+        // Global variables provided by the environment, with graceful fallbacks
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -625,7 +625,9 @@
         // --- Start the App ---
         window.onload = function() {
             showLoading(true);
-            initFirebase();
+            // This is the main change: We wait a moment before trying to initialize Firebase.
+            // This gives the environment variables time to load.
+            setTimeout(initFirebase, 500);
         };
 
     </script>
