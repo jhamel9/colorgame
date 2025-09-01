@@ -7,9 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
+    body { font-family: 'Inter', sans-serif; }
     .spinner {
       border-top-color: #3b82f6;
       border-right-color: transparent;
@@ -17,271 +15,166 @@
       border-left-color: transparent;
     }
   </style>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"></script>
 </head>
 <body class="bg-[#f0f4f8] flex items-center justify-center min-h-screen p-4">
 
   <!-- Main Game Container -->
   <main class="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center max-w-lg w-full">
 
-    <!-- Header Section -->
+    <!-- Header -->
     <header class="text-center mb-6">
-      <h1 class="text-5xl md:text-6xl font-extrabold text-gray-800 tracking-tight leading-none">
-        Color Clash
-      </h1>
+      <h1 class="text-5xl md:text-6xl font-extrabold text-gray-800">Color Clash</h1>
     </header>
 
-    <!-- Game Status and Player IDs -->
+    <!-- Status -->
     <div class="w-full text-center text-lg font-medium text-gray-600 mb-6">
       <div class="flex justify-between items-center mb-2">
         <span>Your ID:</span>
-        <span id="your-id" class="font-bold text-gray-800 break-all"></span>
+        <span id="your-id" class="font-bold text-gray-800"></span>
       </div>
       <div class="flex justify-between items-center mb-2">
-        <span>Opponent's ID:</span>
-        <span id="opponent-id" class="font-bold text-gray-800">pending...</span>
+        <span>Opponent(s):</span>
+        <span id="opponent-id" class="font-bold text-gray-800">waiting...</span>
       </div>
-      <p id="status-text" class="text-gray-500 mt-2 text-sm"></p>
-      <!-- Loading Spinner (initially hidden) -->
       <div id="loading-spinner" class="mt-4 hidden">
         <div class="spinner animate-spin h-8 w-8 rounded-full border-4 border-t-blue-500"></div>
       </div>
     </div>
 
-    <!-- Game Board Section -->
-    <div class="grid grid-cols-3 gap-2 w-full aspect-square bg-gray-100 rounded-lg p-2 mb-6 shadow-inner">
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
-      <div class="board-square bg-white rounded-md transition-colors duration-200 hover:bg-gray-200 cursor-pointer"></div>
+    <!-- Game Board -->
+    <div id="board" class="grid grid-cols-3 gap-2 w-full aspect-square bg-gray-100 rounded-lg p-2 mb-6 shadow-inner">
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
+      <div class="board-square bg-white rounded-md cursor-pointer"></div>
     </div>
 
-    <!-- Button Actions Section -->
+    <!-- Buttons -->
     <div class="w-full grid gap-4 grid-cols-1 md:grid-cols-3">
-      <button id="find-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md">
+      <button id="find-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
         Find a Game
       </button>
-      <button id="create-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md">
+      <button id="create-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
         Create Room
       </button>
-      <button id="join-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors duration-200 shadow-md">
+      <button id="join-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
         Join Room
       </button>
     </div>
 
   </main>
 
-  <!-- Join Room Modal -->
-  <div id="join-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-      <h3 class="text-xl font-bold mb-4">Enter Room ID</h3>
-      <input type="text" id="room-id-input" class="w-full p-2 border rounded-md mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Room ID">
-      <div class="flex justify-end gap-2">
-        <button id="join-modal-cancel" class="py-2 px-4 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors duration-200">
-          Cancel
-        </button>
-        <button id="join-modal-join" class="py-2 px-4 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors duration-200">
-          Join
-        </button>
-      </div>
-    </div>
-  </div>
-
   <script type="module">
-    // Firebase SDK imports
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, addDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, set, push, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
-    // Global variables provided by the environment
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // Firebase Config (replace with your DB URL in console)
+    const firebaseConfig = {
+      apiKey: "AIzaSyAAdhMaGfsTQ2Er9fx3dAGF5vYY0Kq54lQ",
+      authDomain: "colorgame-d6c1e.firebaseapp.com",
+      databaseURL: "https://colorgame-d6c1e-default-rtdb.firebaseio.com",
+      projectId: "colorgame-d6c1e",
+      storageBucket: "colorgame-d6c1e.firebasestorage.app",
+      messagingSenderId: "898360521882",
+      appId: "1:898360521882:web:f23372e10787323435db23",
+      measurementId: "G-75VYMC3GPV"
+    };
 
-    // Firebase Initialization
-    let app, auth, db, userId;
+    // Init
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-    if (Object.keys(firebaseConfig).length > 0) {
-      app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } else {
-      console.error("Firebase config is not available.");
+    // Player ID
+    let yourPlayerId = "player_" + Math.floor(Math.random() * 10000);
+    document.getElementById("your-id").textContent = yourPlayerId;
+    let currentRoomId = null;
+
+    // Firebase Functions
+    function createRoom(playerId) {
+      const roomRef = ref(db, "rooms");
+      const newRoomRef = push(roomRef);
+      set(newRoomRef, {
+        players: { [playerId]: true },
+        createdAt: Date.now()
+      });
+      currentRoomId = newRoomRef.key;
+      listenRoom(currentRoomId);
+      return currentRoomId;
     }
 
-    // UI elements
-    const yourIdEl = document.getElementById('your-id');
-    const opponentIdEl = document.getElementById('opponent-id');
-    const statusTextEl = document.getElementById('status-text');
-    const findGameBtn = document.getElementById('find-game-btn');
-    const createRoomBtn = document.getElementById('create-room-btn');
-    const joinRoomBtn = document.getElementById('join-room-btn');
-    const loadingSpinner = document.getElementById('loading-spinner');
-    const joinModal = document.getElementById('join-modal');
-    const joinModalCancelBtn = document.getElementById('join-modal-cancel');
-    const joinModalJoinBtn = document.getElementById('join-modal-join');
-    const roomIdInput = document.getElementById('room-id-input');
+    function joinRoom(roomId, playerId) {
+      const roomPlayersRef = ref(db, "rooms/" + roomId + "/players/" + playerId);
+      set(roomPlayersRef, true);
+      listenRoom(roomId);
+    }
 
-    let currentRoomId = null;
-    let unsubscribeFromRoom = null;
-
-    // Authentication and Firestore setup
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        userId = user.uid;
-        console.log("Authenticated with user ID:", userId);
-        yourIdEl.textContent = userId;
-        statusTextEl.textContent = "Authenticated. Ready to play!";
-      } else {
-        console.log("No user signed in. Signing in anonymously...");
-        try {
-          if (initialAuthToken) {
-            await signInWithCustomToken(auth, initialAuthToken);
-          } else {
-            await signInAnonymously(auth);
-          }
-        } catch (error) {
-          console.error("Error during authentication:", error);
-          statusTextEl.textContent = "Authentication failed. See console for details.";
-        }
-      }
-    });
-
-    const roomsCollectionRef = (appId) => collection(db, `artifacts/${appId}/public/data/rooms`);
-
-    // Creates a new game room
-    const createRoom = async () => {
-      if (!userId) {
-        console.error("User not authenticated.");
-        statusTextEl.textContent = "Please wait, authenticating...";
-        return;
-      }
-
-      loadingSpinner.classList.remove('hidden');
-      statusTextEl.textContent = "Creating room...";
-
-      try {
-        const newRoomRef = doc(roomsCollectionRef(appId));
-        await setDoc(newRoomRef, {
-          players: [userId],
-          status: 'waiting',
-          createdAt: new Date().toISOString(),
-        });
-        currentRoomId = newRoomRef.id;
-        console.log("Room created with ID:", currentRoomId);
-        statusTextEl.textContent = `Room created! Your Room ID is: ${currentRoomId}. Waiting for an opponent...`;
-        
-        // Listen for changes to the room
-        listenToRoom(currentRoomId);
-      } catch (error) {
-        console.error("Error creating room:", error);
-        statusTextEl.textContent = "Error creating room. Please try again.";
-        loadingSpinner.classList.add('hidden');
-      }
-    };
-
-    // Joins an existing game room
-    const joinRoom = async (roomId) => {
-      if (!userId) {
-        console.error("User not authenticated.");
-        statusTextEl.textContent = "Please wait, authenticating...";
-        return;
-      }
-      
-      loadingSpinner.classList.remove('hidden');
-      statusTextEl.textContent = "Joining room...";
-      
-      try {
-        const roomRef = doc(roomsCollectionRef(appId), roomId);
-        const roomSnap = await getDoc(roomRef);
-
-        if (!roomSnap.exists()) {
-          statusTextEl.textContent = "Room not found. Please try a different ID.";
-          return;
-        }
-
-        const roomData = roomSnap.data();
-        if (roomData.players.length >= 2) {
-          statusTextEl.textContent = "This room is full. Try another one.";
-          return;
-        }
-
-        await updateDoc(roomRef, {
-          players: [...roomData.players, userId],
-          status: 'ready',
-        });
-        
-        currentRoomId = roomId;
-        statusTextEl.textContent = `Joined room ${roomId}! Starting game...`;
-        
-        // Listen for changes to the room
-        listenToRoom(currentRoomId);
-
-      } catch (error) {
-        console.error("Error joining room:", error);
-        statusTextEl.textContent = "Error joining room. Please check the ID and try again.";
-        loadingSpinner.classList.add('hidden');
-      }
-    };
-
-    // Listens for changes to a specific room document
-    const listenToRoom = (roomId) => {
-      if (unsubscribeFromRoom) {
-        unsubscribeFromRoom();
-      }
-
-      unsubscribeFromRoom = onSnapshot(doc(roomsCollectionRef(appId), roomId), (docSnap) => {
-        if (docSnap.exists()) {
-          const room = docSnap.data();
-          opponentIdEl.textContent = room.players.find(id => id !== userId) || 'waiting...';
-
-          if (room.status === 'ready') {
-            statusTextEl.textContent = "Opponent found! The game is starting...";
-            loadingSpinner.classList.add('hidden');
-          }
-        } else {
-          console.log("Room document no longer exists.");
-          statusTextEl.textContent = "Room disbanded. Please create or join a new one.";
-          loadingSpinner.classList.add('hidden');
-          opponentIdEl.textContent = 'pending...';
-          currentRoomId = null;
-          unsubscribeFromRoom = null;
+    function listenRoom(roomId) {
+      const roomRef = ref(db, "rooms/" + roomId + "/players");
+      onValue(roomRef, (snapshot) => {
+        const players = snapshot.val();
+        if (players) {
+          const names = Object.keys(players).filter(p => p !== yourPlayerId);
+          document.getElementById("opponent-id").textContent = names.join(", ") || "waiting...";
         }
       });
-    };
-    
-    // Event listeners for buttons
-    createRoomBtn.addEventListener('click', createRoom);
+    }
 
-    joinRoomBtn.addEventListener('click', () => {
-      joinModal.classList.add('flex');
-      joinModal.classList.remove('hidden');
+    // Button Actions
+    document.getElementById("create-room-btn").addEventListener("click", () => {
+      createRoom(yourPlayerId);
     });
 
-    joinModalCancelBtn.addEventListener('click', () => {
-      joinModal.classList.add('hidden');
-      joinModal.classList.remove('flex');
-    });
-
-    joinModalJoinBtn.addEventListener('click', () => {
-      const roomId = roomIdInput.value.trim();
-      if (roomId) {
-        joinRoom(roomId);
-        joinModal.classList.add('hidden');
-        joinModal.classList.remove('flex');
+    document.getElementById("join-room-btn").addEventListener("click", () => {
+      if (currentRoomId) {
+        joinRoom(currentRoomId, yourPlayerId);
       } else {
-        alert("Please enter a valid room ID."); // Using custom modal in final product
+        alert("No active room. Ask a friend for the room ID.");
       }
     });
 
-    // Initial dummy values for UI
-    yourIdEl.textContent = 'initializing...';
-    opponentIdEl.textContent = 'waiting...';
-    statusTextEl.textContent = "Connecting to server...";
+    document.getElementById("find-game-btn").addEventListener("click", () => {
+      alert("Matchmaking coming soon...");
+    });
+
+    // Board Sync (basic demo)
+    const boardSquares = document.querySelectorAll(".board-square");
+    boardSquares.forEach((square, idx) => {
+      square.addEventListener("click", () => {
+        if (!currentRoomId) {
+          alert("Join or create a room first!");
+          return;
+        }
+        const squareRef = ref(db, `rooms/${currentRoomId}/board/${idx}`);
+        set(squareRef, yourPlayerId);
+      });
+    });
+
+    // Listen for board changes
+    function listenBoard(roomId) {
+      const boardRef = ref(db, "rooms/" + roomId + "/board");
+      onValue(boardRef, (snapshot) => {
+        const board = snapshot.val() || {};
+        boardSquares.forEach((sq, idx) => {
+          if (board[idx]) {
+            sq.style.backgroundColor = board[idx] === yourPlayerId ? "#3b82f6" : "#f87171";
+          }
+        });
+      });
+    }
+    // Call when joined
+    function listenRoomAndBoard(roomId) {
+      listenRoom(roomId);
+      listenBoard(roomId);
+    }
   </script>
 
 </body>
