@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Guess the Color - 2 Player</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background: #f2f2f2; }
+    #game { margin-top: 20px; }
+    input, button { margin: 5px; padding: 8px; }
+    .color-box { width: 100px; height: 100px; display: inline-block; margin: 10px; border: 2px solid #000; }
+  </style>
+</head>
+<body>
+  <h1>🎨 Guess the Color</h1>
+  <div>
+    <input id="userId" placeholder="Enter your User ID">
+    <input id="roomId" placeholder="Enter Room ID">
+    <button onclick="joinGame()">Join Game</button>
+  </div>
+
+  <div id="game" style="display:none;">
+    <h2 id="status">Waiting...</h2>
+    <div id="controls"></div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <script>
+    // 🔑 Your Firebase Config (replace with your own project keys)
+    const firebaseConfig = {
+      apiKey: "AIza....", // replace
+      authDomain: "your-app.firebaseapp.com",
+      databaseURL: "https://your-app.firebaseio.com",
+      projectId: "your-app",
+      storageBucket: "your-app.appspot.com",
+      messagingSenderId: "12345",
+      appId: "1:12345:web:abcd"
+    };
+
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let userId, roomId;
+
+    function joinGame() {
+      userId = document.getElementById("userId").value;
+      roomId = document.getElementById("roomId").value;
+      if (!userId || !roomId) { alert("Enter User ID and Room ID"); return; }
+
+      document.getElementById("game").style.display = "block";
+      setupListeners();
+    }
+
+    function setupListeners() {
+      const roomRef = db.ref("rooms/" + roomId);
+
+      // Listen for game state updates
+      roomRef.on("value", snap => {
+        const data = snap.val();
+        if (!data) return;
+
+        if (data.color && data.turn !== userId) {
+          showGuessOptions(data.color);
+        }
+
+        if (data.winner) {
+          document.getElementById("status").innerText = "Winner: " + data.winner;
+          document.getElementById("controls").innerHTML = "";
+        }
+      });
+
+      // Setup turn if not exists
+      roomRef.once("value").then(snap => {
+        if (!snap.exists()) {
+          roomRef.set({ turn: userId });
+          showPickColor();
+        }
+      });
+    }
+
+    function showPickColor() {
+      document.getElementById("status").innerText = "Your turn! Pick a color";
+      document.getElementById("controls").innerHTML = `
+        <button onclick="pickColor('red')" style="background:red;color:white;">Red</button>
+        <button onclick="pickColor('blue')" style="background:blue;color:white;">Blue</button>
+        <button onclick="pickColor('green')" style="background:green;color:white;">Green</button>
+      `;
+    }
+
+    function pickColor(color) {
+      const roomRef = db.ref("rooms/" + roomId);
+      roomRef.update({ color: color, turn: "opponent" }); 
+      document.getElementById("status").innerText = "Waiting for opponent...";
+      document.getElementById("controls").innerHTML = "";
+    }
+
+    function showGuessOptions(secretColor) {
+      document.getElementById("status").innerText = "Guess the color!";
+      document.getElementById("controls").innerHTML = `
+        <button onclick="makeGuess('red','${secretColor}')" style="background:red;color:white;">Red</button>
+        <button onclick="makeGuess('blue','${secretColor}')" style="background:blue;color:white;">Blue</button>
+        <button onclick="makeGuess('green','${secretColor}')" style="background:green;color:white;">Green</button>
+      `;
+    }
+
+    function makeGuess(choice, secret) {
+      const roomRef = db.ref("rooms/" + roomId);
+      if (choice === secret) {
+        roomRef.update({ winner: userId });
+      } else {
+        roomRef.update({ winner: "Opponent" });
+      }
+    }
+  </script>
+</body>
+</html>
