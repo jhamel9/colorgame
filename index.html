@@ -59,6 +59,23 @@
             margin-bottom: 24px;
         }
 
+        .user-info {
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+            margin-bottom: 24px;
+            word-wrap: break-word;
+        }
+        
+        .user-info span {
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        
+        .id-label {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
         .board {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -145,197 +162,96 @@
             box-shadow: none;
         }
 
-        .link-container {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #e2e8f0;
-            border-radius: 8px;
-            word-wrap: break-word;
-            font-size: 0.9rem;
-            text-align: left;
-        }
-        
-        .link-container p {
-            margin: 0;
-            color: var(--secondary-color);
+        .input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
         }
 
-        .link-container a {
-            color: var(--primary-color);
-            font-weight: 700;
-            text-decoration: none;
+        .input-group input {
+            padding: 10px 16px;
+            border-radius: var(--border-radius);
+            border: 1px solid #cbd5e0;
+            flex-grow: 1;
+            font-size: 1rem;
+            color: var(--text-color);
+            background-color: #f8fafc;
         }
 
-        .link-container a:hover {
-            text-decoration: underline;
+        .loading-spinner {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 4px solid var(--secondary-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
         }
 
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         <h1>Color Clash</h1>
-        <div class="status-message" id="status-message">Ready to play!</div>
+        <div class="user-info">
+            <p><span class="id-label">Your ID:</span> <span id="your-id">...</span></p>
+            <p><span class="id-label">Opponent's ID:</span> <span id="opponent-id">...</span></p>
+        </div>
+        <div id="loading" class="loading-spinner"></div>
+        <div class="status-message" id="status-message">Loading game...</div>
         <div id="board" class="board"></div>
         
         <div id="game-options" class="button-group">
-            <button id="new-game-button" class="button">Start a New Game</button>
-            <button id="reset-button" class="button">Reset Game</button>
+            <button id="find-game-button" class="button">Find a Game</button>
+            <div class="input-group">
+                <input type="text" id="room-id-input" placeholder="Enter Room ID">
+            </div>
+            <div class="input-group">
+                <button id="create-room-button" class="button">Create Room</button>
+                <button id="join-room-button" class="button">Join Room</button>
+            </div>
         </div>
-
-        <div id="game-link-section" class="link-container" style="display: none;">
-            <p>Share this link with your opponent:</p>
-            <p><a id="game-link" href="#"></a></p>
-        </div>
-
     </div>
 
     <script>
-        const boardElement = document.getElementById('board');
-        const statusMessageElement = document.getElementById('status-message');
-        const newGameButton = document.getElementById('new-game-button');
-        const resetButton = document.getElementById('reset-button');
-        const gameLinkSection = document.getElementById('game-link-section');
-        const gameLinkElement = document.getElementById('game-link');
-        
-        let board = Array(9).fill('empty');
-        let currentPlayer = 'red';
-        const winningCombinations = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]
-        ];
+        // Placeholder JavaScript for a UI demonstration.
+        // In a real application, these would be controlled by game logic.
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingSpinner = document.getElementById('loading');
+            const statusMessage = document.getElementById('status-message');
+            const board = document.getElementById('board');
+            const yourId = document.getElementById('your-id');
+            const opponentId = document.getElementById('opponent-id');
+            
+            // Example of a loading state
+            loadingSpinner.style.display = 'block';
+            statusMessage.textContent = 'Connecting to the game server...';
 
-        // --- Game State Management ---
+            setTimeout(() => {
+                loadingSpinner.style.display = 'none';
+                statusMessage.textContent = 'Ready to play! Find or create a game.';
+                yourId.textContent = 'user-abcdef1234';
+                opponentId.textContent = 'user-5678ghij';
+                renderEmptyBoard();
+            }, 2000);
 
-        // Function to save the game state to the URL
-        function saveGameStateToUrl() {
-            const gameState = { board, currentPlayer };
-            const jsonState = JSON.stringify(gameState);
-            const encodedState = btoa(jsonState);
-            const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?state=${encodedState}`;
-            window.history.pushState(gameState, '', newUrl);
-            gameLinkElement.textContent = newUrl;
-            gameLinkElement.href = newUrl;
-            gameLinkSection.style.display = 'block';
-        }
-
-        // Function to load the game state from the URL
-        function loadGameStateFromUrl() {
-            const params = new URLSearchParams(window.location.search);
-            const encodedState = params.get('state');
-            if (encodedState) {
-                try {
-                    const jsonState = atob(encodedState);
-                    const gameState = JSON.parse(jsonState);
-                    board = gameState.board;
-                    currentPlayer = gameState.currentPlayer;
-                    renderBoard();
-                    return true;
-                } catch (e) {
-                    console.error("Invalid game state in URL:", e);
-                    return false;
+            // Function to render the empty game board
+            function renderEmptyBoard() {
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    board.appendChild(cell);
                 }
             }
-            return false;
-        }
-
-        // --- Game Logic ---
-
-        function renderBoard() {
-            boardElement.innerHTML = '';
-            board.forEach((color, index) => {
-                const cell = document.createElement('div');
-                cell.classList.add('cell');
-                if (color !== 'empty') {
-                    cell.classList.add(color);
-                }
-                cell.onclick = () => handleCellClick(index);
-                boardElement.appendChild(cell);
-            });
-            updateStatusMessage();
-            checkGameEnd();
-        }
-
-        function handleCellClick(index) {
-            if (board[index] === 'empty') {
-                board[index] = currentPlayer;
-                currentPlayer = currentPlayer === 'red' ? 'blue' : 'red';
-                renderBoard();
-                saveGameStateToUrl();
-            }
-        }
-
-        function updateStatusMessage() {
-            statusMessageElement.textContent = `It's the ${currentPlayer.toUpperCase()}'s turn.`;
-        }
-
-        function checkGameEnd() {
-            const winner = checkWinner();
-            if (winner) {
-                if (winner === 'draw') {
-                    statusMessageElement.textContent = "It's a draw!";
-                } else {
-                    statusMessageElement.textContent = `${winner.toUpperCase()} wins!`;
-                    highlightWinningCells(checkWinningCombo());
-                }
-                disableBoard();
-            }
-        }
-
-        function checkWinner() {
-            for (const combo of winningCombinations) {
-                const [a, b, c] = combo;
-                if (board[a] !== 'empty' && board[a] === board[b] && board[a] === board[c]) {
-                    return board[a];
-                }
-            }
-            if (board.every(cell => cell !== 'empty')) {
-                return 'draw';
-            }
-            return null;
-        }
-        
-        function checkWinningCombo() {
-            for (const combo of winningCombinations) {
-                const [a, b, c] = combo;
-                if (board[a] !== 'empty' && board[a] === board[b] && board[a] === board[c]) {
-                    return combo;
-                }
-            }
-            return [];
-        }
-
-        function highlightWinningCells(combo) {
-            combo.forEach(index => {
-                boardElement.children[index].classList.add('win');
-            });
-        }
-
-        function disableBoard() {
-            for (let i = 0; i < boardElement.children.length; i++) {
-                boardElement.children[i].onclick = null;
-            }
-        }
-
-        function newGame() {
-            board = Array(9).fill('empty');
-            currentPlayer = 'red';
-            window.history.pushState(null, '', window.location.pathname);
-            gameLinkSection.style.display = 'none';
-            renderBoard();
-        }
-
-        // --- Event Listeners ---
-        newGameButton.onclick = newGame;
-        resetButton.onclick = newGame;
-
-        // --- Initial State ---
-        if (!loadGameStateFromUrl()) {
-            renderBoard();
-        }
-
+        });
     </script>
+
 </body>
 </html>
