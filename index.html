@@ -194,20 +194,32 @@
 
     /**
      * Creates a new game room in the database.
+     * @param {string} roomId - The ID of the room to create.
      * @param {string} playerId - The ID of the player creating the room.
      */
-    function createRoom(playerId) {
+    async function createRoom(roomId, playerId) {
+      if (!roomId || roomId.trim() === '') {
+        showModal("Error", "Room ID cannot be empty.");
+        return;
+      }
+      
       resetUI();
-      const roomRef = ref(db, "rooms");
-      const newRoomRef = push(roomRef);
-      set(newRoomRef, {
+      const roomRef = ref(db, "rooms/" + roomId);
+      const snapshot = await get(roomRef);
+      
+      if (snapshot.exists()) {
+        showModal("Error", `Room ID "${roomId}" already exists. Please choose a different one.`);
+        return;
+      }
+      
+      set(roomRef, {
         players: { [playerId]: true },
         turn: playerId,
         board: Array(9).fill(null),
         status: 'waiting',
         createdAt: Date.now()
       });
-      currentRoomId = newRoomRef.key;
+      currentRoomId = roomId;
       listenRoom(currentRoomId);
       showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend!`);
     }
@@ -316,8 +328,11 @@
     }
 
     // Button Actions
-    document.getElementById("create-room-btn").addEventListener("click", () => {
-      createRoom(yourPlayerId);
+    document.getElementById("create-room-btn").addEventListener("click", async () => {
+      const roomId = await showModal("Create Room", "Enter a unique ID for your room:", true);
+      if (roomId) {
+        createRoom(roomId, yourPlayerId);
+      }
     });
 
     document.getElementById("join-room-btn").addEventListener("click", async () => {
@@ -349,8 +364,8 @@
           }
         }
         if (!foundGame) {
-          showModal("No games found", "No active games found, creating a new room for you.");
-          createRoom(yourPlayerId);
+          showModal("No games found", "No active games found, creating a new room for you with a random ID.");
+          createRoom("room_" + Math.floor(Math.random() * 10000), yourPlayerId);
         }
         off(findGameOnce);
         loadingSpinner.classList.add('hidden');
