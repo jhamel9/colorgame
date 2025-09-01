@@ -14,6 +14,9 @@
       border-bottom-color: transparent;
       border-left-color: transparent;
     }
+    .modal-overlay {
+      background-color: rgba(0, 0, 0, 0.5);
+    }
   </style>
 
   <!-- Firebase SDK -->
@@ -40,7 +43,12 @@
         <span>Opponent(s):</span>
         <span id="opponent-id" class="font-bold text-gray-800">waiting...</span>
       </div>
-      <div id="loading-spinner" class="mt-4 hidden">
+      <div class="flex justify-between items-center mb-2">
+        <span>Turn:</span>
+        <span id="current-turn" class="font-bold text-gray-800"></span>
+      </div>
+      <div id="game-status" class="text-3xl font-extrabold mt-4 text-center text-green-600"></div>
+      <div id="loading-spinner" class="mt-4 hidden flex justify-center">
         <div class="spinner animate-spin h-8 w-8 rounded-full border-4 border-t-blue-500"></div>
       </div>
     </div>
@@ -60,24 +68,43 @@
 
     <!-- Buttons -->
     <div class="w-full grid gap-4 grid-cols-1 md:grid-cols-3">
-      <button id="find-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
+      <button id="find-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
         Find a Game
       </button>
-      <button id="create-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
+      <button id="create-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
         Create Room
       </button>
-      <button id="join-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600">
+      <button id="join-room-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors">
         Join Room
+      </button>
+      <button id="restart-game-btn" class="w-full py-3 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors hidden">
+        Restart Game
       </button>
     </div>
 
   </main>
 
+  <!-- Custom Modal -->
+  <div id="custom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm flex flex-col items-center">
+      <h2 id="modal-title" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+      <p id="modal-message" class="text-gray-600 text-center mb-4"></p>
+      <input id="modal-input" type="text" class="w-full p-2 border rounded-md mb-4 text-center hidden" placeholder="Enter Room ID">
+      <button id="modal-confirm-btn" class="w-full py-2 rounded-lg font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-colors hidden">
+        Confirm
+      </button>
+      <button id="modal-close-btn" class="w-full py-2 rounded-lg font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors">
+        Close
+      </button>
+    </div>
+  </div>
+
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getDatabase, ref, set, push, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getDatabase, ref, set, push, onValue, off, get } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
-    // Firebase Config (replace with your DB URL in console)
+    // Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyAAdhMaGfsTQ2Er9fx3dAGF5vYY0Kq54lQ",
       authDomain: "colorgame-d6c1e.firebaseapp.com",
@@ -89,41 +116,201 @@
       measurementId: "G-75VYMC3GPV"
     };
 
-    // Init
+    // Init Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Player ID
-    let yourPlayerId = "player_" + Math.floor(Math.random() * 10000);
+    // Player ID & Room State
+    const yourPlayerId = "player_" + Math.floor(Math.random() * 10000);
     document.getElementById("your-id").textContent = yourPlayerId;
     let currentRoomId = null;
+    let unlistenBoard = null;
+    let unlistenRoom = null;
 
-    // Firebase Functions
+    // UI Elements
+    const boardSquares = document.querySelectorAll(".board-square");
+    const statusText = document.getElementById("game-status");
+    const restartBtn = document.getElementById("restart-game-btn");
+    const loadingSpinner = document.getElementById("loading-spinner");
+    const turnText = document.getElementById("current-turn");
+
+    // Modal Elements
+    const modal = document.getElementById("custom-modal");
+    const modalTitle = document.getElementById("modal-title");
+    const modalMessage = document.getElementById("modal-message");
+    const modalInput = document.getElementById("modal-input");
+    const modalConfirmBtn = document.getElementById("modal-confirm-btn");
+    const modalCloseBtn = document.getElementById("modal-close-btn");
+
+    /**
+     * Shows a custom modal with a message and optional input.
+     * @param {string} title - The title of the modal.
+     * @param {string} message - The message to display.
+     * @param {boolean} showInput - Whether to show the input field.
+     * @returns {Promise<string|null>} A promise that resolves with the input value or null.
+     */
+    function showModal(title, message, showInput = false) {
+      return new Promise(resolve => {
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        if (showInput) {
+          modalInput.value = '';
+          modalInput.classList.remove('hidden');
+          modalConfirmBtn.classList.remove('hidden');
+          modalConfirmBtn.onclick = () => {
+            modal.classList.add('hidden');
+            resolve(modalInput.value);
+          };
+        } else {
+          modalInput.classList.add('hidden');
+          modalConfirmBtn.classList.add('hidden');
+        }
+        modalCloseBtn.onclick = () => {
+          modal.classList.add('hidden');
+          resolve(null);
+        };
+        modal.classList.remove('hidden');
+      });
+    }
+
+    /** Resets the UI to the initial state. */
+    function resetUI() {
+      if (unlistenBoard) off(unlistenBoard);
+      if (unlistenRoom) off(unlistenRoom);
+      currentRoomId = null;
+      boardSquares.forEach(sq => {
+        sq.style.backgroundColor = '';
+        sq.classList.remove('cursor-not-allowed', 'opacity-50');
+      });
+      document.getElementById("opponent-id").textContent = "waiting...";
+      statusText.textContent = "";
+      turnText.textContent = "";
+      restartBtn.classList.add('hidden');
+      loadingSpinner.classList.add('hidden');
+      document.getElementById("find-game-btn").disabled = false;
+      document.getElementById("create-room-btn").disabled = false;
+      document.getElementById("join-room-btn").disabled = false;
+    }
+
+    /**
+     * Creates a new game room in the database.
+     * @param {string} playerId - The ID of the player creating the room.
+     */
     function createRoom(playerId) {
+      resetUI();
       const roomRef = ref(db, "rooms");
       const newRoomRef = push(roomRef);
       set(newRoomRef, {
         players: { [playerId]: true },
+        turn: playerId,
+        board: Array(9).fill(null),
+        status: 'waiting',
         createdAt: Date.now()
       });
       currentRoomId = newRoomRef.key;
       listenRoom(currentRoomId);
-      return currentRoomId;
+      showModal("Room Created!", `Your room ID is: ${currentRoomId}. Share it with a friend!`);
     }
 
+    /**
+     * Joins an existing room.
+     * @param {string} roomId - The ID of the room to join.
+     * @param {string} playerId - The ID of the player joining.
+     */
     function joinRoom(roomId, playerId) {
-      const roomPlayersRef = ref(db, "rooms/" + roomId + "/players/" + playerId);
-      set(roomPlayersRef, true);
-      listenRoom(roomId);
+      resetUI();
+      const roomPlayersRef = ref(db, "rooms/" + roomId + "/players");
+      get(roomPlayersRef).then(snapshot => {
+        if (snapshot.exists() && Object.keys(snapshot.val()).length < 2) {
+          const players = snapshot.val();
+          if (players && !players[playerId]) {
+            set(ref(db, `rooms/${roomId}/players/${playerId}`), true);
+            currentRoomId = roomId;
+            listenRoom(roomId);
+            showModal("Joined Room!", `You have joined room: ${roomId}`);
+          } else {
+            showModal("Error", "Room is full or you are already in it.");
+          }
+        } else {
+          showModal("Error", "Room not found or is already full.");
+        }
+      }).catch(error => {
+        console.error(error);
+        showModal("Error", "Could not join room. Please check the ID.");
+      });
     }
 
+    /**
+     * Listens for changes in the room players and game state.
+     * @param {string} roomId - The ID of the room.
+     */
     function listenRoom(roomId) {
-      const roomRef = ref(db, "rooms/" + roomId + "/players");
-      onValue(roomRef, (snapshot) => {
-        const players = snapshot.val();
-        if (players) {
+      const roomRef = ref(db, "rooms/" + roomId);
+      unlistenRoom = onValue(roomRef, (snapshot) => {
+        const room = snapshot.val();
+        if (room) {
+          const players = room.players || {};
           const names = Object.keys(players).filter(p => p !== yourPlayerId);
           document.getElementById("opponent-id").textContent = names.join(", ") || "waiting...";
+
+          if (Object.keys(players).length === 2 && room.status === 'waiting') {
+            set(ref(db, `rooms/${roomId}/status`), 'playing');
+            listenBoard(roomId);
+          }
+
+          if (room.turn) {
+            turnText.textContent = room.turn === yourPlayerId ? "Your Turn" : "Opponent's Turn";
+          }
+          
+          if (room.winner) {
+            statusText.textContent = room.winner === yourPlayerId ? "You Win!" : "You Lose!";
+            restartBtn.classList.remove('hidden');
+          } else if (room.status === 'draw') {
+            statusText.textContent = "It's a Draw!";
+            restartBtn.classList.remove('hidden');
+          } else if (room.status === 'playing') {
+            statusText.textContent = "";
+          }
+        }
+      });
+    }
+    
+    /** Checks for a winning combination on the board. */
+    function checkWin(board) {
+      const winConditions = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+      ];
+      for (let i = 0; i < winConditions.length; i++) {
+        const [a, b, c] = winConditions[i];
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+          return board[a];
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Listens for changes on the board and updates the UI.
+     * @param {string} roomId - The ID of the room.
+     */
+    function listenBoard(roomId) {
+      const boardRef = ref(db, "rooms/" + roomId + "/board");
+      unlistenBoard = onValue(boardRef, (snapshot) => {
+        const board = snapshot.val() || Array(9).fill(null);
+        boardSquares.forEach((sq, idx) => {
+          sq.style.backgroundColor = '';
+          if (board[idx]) {
+            sq.style.backgroundColor = board[idx] === yourPlayerId ? "#3b82f6" : "#f87171";
+          }
+        });
+        
+        const winner = checkWin(board);
+        if (winner) {
+          set(ref(db, `rooms/${roomId}/winner`), winner);
+        } else if (!board.includes(null)) {
+          set(ref(db, `rooms/${roomId}/status`), 'draw');
         }
       });
     }
@@ -133,48 +320,88 @@
       createRoom(yourPlayerId);
     });
 
-    document.getElementById("join-room-btn").addEventListener("click", () => {
-      if (currentRoomId) {
-        joinRoom(currentRoomId, yourPlayerId);
-      } else {
-        alert("No active room. Ask a friend for the room ID.");
+    document.getElementById("join-room-btn").addEventListener("click", async () => {
+      const roomId = await showModal("Join Room", "Enter the Room ID to join:", true);
+      if (roomId) {
+        joinRoom(roomId, yourPlayerId);
       }
     });
 
     document.getElementById("find-game-btn").addEventListener("click", () => {
-      alert("Matchmaking coming soon...");
+      resetUI();
+      loadingSpinner.classList.remove('hidden');
+      document.getElementById("find-game-btn").disabled = true;
+      document.getElementById("create-room-btn").disabled = true;
+      document.getElementById("join-room-btn").disabled = true;
+
+      const roomsRef = ref(db, "rooms");
+      const findGameOnce = onValue(roomsRef, async (snapshot) => {
+        const rooms = snapshot.val();
+        let foundGame = false;
+        if (rooms) {
+          for (const roomId in rooms) {
+            const room = rooms[roomId];
+            if (room.players && Object.keys(room.players).length === 1) {
+              await joinRoom(roomId, yourPlayerId);
+              foundGame = true;
+              break;
+            }
+          }
+        }
+        if (!foundGame) {
+          showModal("No games found", "No active games found, creating a new room for you.");
+          createRoom(yourPlayerId);
+        }
+        off(findGameOnce);
+        loadingSpinner.classList.add('hidden');
+      }, { onlyOnce: true });
     });
 
-    // Board Sync (basic demo)
-    const boardSquares = document.querySelectorAll(".board-square");
+    document.getElementById("restart-game-btn").addEventListener("click", () => {
+      if (currentRoomId) {
+        set(ref(db, `rooms/${currentRoomId}`), {
+          players: { [yourPlayerId]: true },
+          turn: yourPlayerId,
+          board: Array(9).fill(null),
+          status: 'waiting',
+          createdAt: Date.now()
+        });
+        restartBtn.classList.add('hidden');
+        statusText.textContent = "";
+        showModal("Game Restarted", "You have restarted the game!");
+      } else {
+        showModal("Error", "No active game to restart.");
+      }
+    });
+
+    // Board Click Listener
     boardSquares.forEach((square, idx) => {
       square.addEventListener("click", () => {
         if (!currentRoomId) {
-          alert("Join or create a room first!");
+          showModal("Action Blocked", "Please create or join a room first!");
           return;
         }
-        const squareRef = ref(db, `rooms/${currentRoomId}/board/${idx}`);
-        set(squareRef, yourPlayerId);
-      });
-    });
 
-    // Listen for board changes
-    function listenBoard(roomId) {
-      const boardRef = ref(db, "rooms/" + roomId + "/board");
-      onValue(boardRef, (snapshot) => {
-        const board = snapshot.val() || {};
-        boardSquares.forEach((sq, idx) => {
-          if (board[idx]) {
-            sq.style.backgroundColor = board[idx] === yourPlayerId ? "#3b82f6" : "#f87171";
+        const roomRef = ref(db, `rooms/${currentRoomId}`);
+        get(roomRef).then(snapshot => {
+          const room = snapshot.val();
+          if (room && room.status === 'playing' && room.turn === yourPlayerId && !room.board[idx]) {
+            const updates = {};
+            updates[`board/${idx}`] = yourPlayerId;
+            const players = Object.keys(room.players);
+            const nextPlayer = players.find(id => id !== yourPlayerId);
+            updates['turn'] = nextPlayer;
+            set(roomRef, { ...room, ...updates });
+          } else if (room.winner || room.status === 'draw') {
+             showModal("Game Over", "The game has already ended. Please restart to play again.");
+          } else if (room.turn !== yourPlayerId) {
+            showModal("Wait Your Turn", "It is not your turn to play.");
+          } else if (room.board[idx]) {
+            showModal("Invalid Move", "This square is already taken.");
           }
         });
       });
-    }
-    // Call when joined
-    function listenRoomAndBoard(roomId) {
-      listenRoom(roomId);
-      listenBoard(roomId);
-    }
+    });
   </script>
 
 </body>
